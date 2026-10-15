@@ -11,6 +11,13 @@ import streamlit as st
 import streamlit.components.v1 as components
 from youtube_transcript_api import YouTubeTranscriptApi
 
+# --- 1. SEITENKONFIGURATION MUSS ALS ERSTES STEHEN ---
+st.set_page_config(
+    page_title="IQube - Secure Multi-Source Discovery Engine",
+    page_icon="🟢",
+    page_layout="wide",
+)
+
 # --- THREAD LOCK FOR SAFE CONCURRENCY ---
 DB_LOCK = threading.Lock()
 USER_DB_FILE = "iqube_secure_db.json"
@@ -80,7 +87,7 @@ TRANSLATIONS = {
         "custom_genre_query": "Custom Search Query",
         "add_matrix": "Add Custom Genre Matrix",
         "diagnostics": "🛠️ SYSTEM DIAGNOSTICS & CONTROL PANEL",
-        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.3 - EN/DE Optimized)",
+        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.4 - Fixed Config)",
         "directory_tab": "📋 Complete IQube Functionality Directory",
         "feedback_title": "🐛 Send Feedback / Bug Report",
         "feedback_placeholder": "Describe bug or request...",
@@ -145,7 +152,7 @@ TRANSLATIONS = {
         "custom_genre_query": "Benutzerdefinierte Suchanfrage",
         "add_matrix": "Genre-Matrix hinzufügen",
         "diagnostics": "🛠️ SYSTEMDIAGNOSE & KONTROLLPANEL",
-        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.3 - EN/DE optimiert)",
+        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.4 - Konfiguration behoben)",
         "directory_tab": "📋 Funktionsverzeichnis",
         "feedback_title": "🐛 Feedback / Fehlerbericht senden",
         "feedback_placeholder": "Fehler oder Wunsch beschreiben...",
@@ -156,12 +163,6 @@ TRANSLATIONS = {
 def t(key: str) -> str:
     lang = st.session_state.get("app_language", "English (EN)")
     return TRANSLATIONS.get(lang, TRANSLATIONS["English (EN)"]).get(key, key)
-
-st.set_page_config(
-    page_title="IQube - Secure Multi-Source Discovery Engine",
-    page_icon="🟢",
-    page_layout="wide",
-)
 
 st.markdown("""
     <style>
@@ -610,5 +611,5 @@ else:
     st.divider()
     st.markdown(f"### {t('diagnostics')}")
     b_tab1, b_tab2 = st.tabs([t("patchnotes_tab"), t("directory_tab")])
-    with b_tab1: st.markdown("#### 🟢 IQube v2.9.3 — Streamlined EN/DE Edition (Zero Syntax Error Risk)")
+    with b_tab1: st.markdown("#### 🟢 IQube v2.9.4 — Page Config Fixed (EN/DE)")
     with b_tab2: st.markdown("#### 📋 Functionality Directory (English & German)")
