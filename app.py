@@ -89,7 +89,7 @@ TRANSLATIONS = {
         "custom_genre_query": "Custom Search Query",
         "add_matrix": "Add Custom Genre Matrix",
         "diagnostics": "🛠️ SYSTEM DIAGNOSTICS & CONTROL PANEL",
-        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.8 - Tested & Verified)",
+        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.9 - Sanitized Build)",
         "directory_tab": "📋 Complete IQube Functionality Directory",
         "feedback_title": "🐛 Send Feedback / Bug Report",
         "feedback_placeholder": "Describe bug or request...",
@@ -154,7 +154,7 @@ TRANSLATIONS = {
         "custom_genre_query": "Benutzerdefinierte Suchanfrage",
         "add_matrix": "Genre-Matrix hinzufügen",
         "diagnostics": "🛠️ SYSTEMDIAGNOSE & KONTROLLPANEL",
-        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.8)",
+        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.9)",
         "directory_tab": "📋 Funktionsverzeichnis",
         "feedback_title": "🐛 Feedback / Fehlerbericht senden",
         "feedback_placeholder": "Fehler oder Wunsch beschreiben...",
@@ -694,5 +694,5 @@ else:
     st.divider()
     st.markdown(f"### {t('diagnostics')}")
     b_tab1, b_tab2 = st.tabs([t("patchnotes_tab"), t("directory_tab")])
-    with b_tab1: st.markdown("#### 🟢 IQube v2.9.8 — Fully Verified Deployment & Email 2FA Link Integration")
+    with b_tab1: st.markdown("#### 🟢 IQube v2.9.9 — Sanitized Build & Verified Config Sequence")
     with b_tab2: st.markdown("#### 📋 Functionality Directory (English & German)")
