@@ -1,3 +1,7 @@
+import streamlit as st
+import streamlit.components.v1 as components
+from googleapiclient.discovery import build
+from youtube_transcript_api import YouTubeTranscriptApi
 import datetime
 import hashlib
 import html
@@ -5,13 +9,8 @@ import json
 import os
 import secrets
 import threading
-from googleapiclient.discovery import build
-import requests
-import streamlit as st
-import streamlit.components.v1 as components
-from youtube_transcript_api import YouTubeTranscriptApi
 
-# --- 1. SEITENKONFIGURATION MUSS ALS ERSTES STEHEN ---
+# --- 1. MUSS ALS ERSTES STEHEN (VOR JEDER FUNKTION & LOGIK) ---
 st.set_page_config(
     page_title="IQube - Secure Multi-Source Discovery Engine",
     page_icon="🟢",
@@ -87,7 +86,7 @@ TRANSLATIONS = {
         "custom_genre_query": "Custom Search Query",
         "add_matrix": "Add Custom Genre Matrix",
         "diagnostics": "🛠️ SYSTEM DIAGNOSTICS & CONTROL PANEL",
-        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.4 - Fixed Config)",
+        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.5)",
         "directory_tab": "📋 Complete IQube Functionality Directory",
         "feedback_title": "🐛 Send Feedback / Bug Report",
         "feedback_placeholder": "Describe bug or request...",
@@ -152,19 +151,20 @@ TRANSLATIONS = {
         "custom_genre_query": "Benutzerdefinierte Suchanfrage",
         "add_matrix": "Genre-Matrix hinzufügen",
         "diagnostics": "🛠️ SYSTEMDIAGNOSE & KONTROLLPANEL",
-        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.4 - Konfiguration behoben)",
+        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.5)",
         "directory_tab": "📋 Funktionsverzeichnis",
         "feedback_title": "🐛 Feedback / Fehlerbericht senden",
         "feedback_placeholder": "Fehler oder Wunsch beschreiben...",
         "submit_admin": "An Admin senden",
-    }
+    },
 }
 
 def t(key: str) -> str:
-    lang = st.session_state.get("app_language", "English (EN)")
-    return TRANSLATIONS.get(lang, TRANSLATIONS["English (EN)"]).get(key, key)
+  lang = st.session_state.get("app_language", "English (EN)")
+  return TRANSLATIONS.get(lang, TRANSLATIONS["English (EN)"]).get(key, key)
 
-st.markdown("""
+st.markdown(
+    """
     <style>
         .stApp { background-color: #030712; color: #f3f4f6; font-family: 'Inter', sans-serif; }
         [data-testid="stSidebar"] { background-color: #0b0f19; border-right: 1px solid rgba(0, 243, 255, 0.1); }
@@ -179,437 +179,586 @@ st.markdown("""
         .broadcast-banner { background: rgba(0, 243, 255, 0.1); border: 1px solid #00f3ff; padding: 10px; border-radius: 8px; margin-bottom: 20px; color: #00f3ff; font-weight: bold; }
         .feedback-card { background: rgba(17, 24, 39, 0.8); border-left: 3px solid #00f3ff; padding: 10px; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em; }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 def hash_password(password: str, salt_hex: str = None) -> tuple[str, str]:
-    if not salt_hex:
-        salt = secrets.token_bytes(16)
-        salt_hex = salt.hex()
-    else:
-        salt = bytes.fromhex(salt_hex)
-    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
-    return key.hex(), salt_hex
+  if not salt_hex:
+    salt = secrets.token_bytes(16)
+    salt_hex = salt.hex()
+  else:
+    salt = bytes.fromhex(salt_hex)
+  key = hashlib.pbkdf2_hmac(
+      "sha256", password.encode("utf-8"), salt, 100000
+  )
+  return key.hex(), salt_hex
+
 
 def load_database() -> dict:
-    with DB_LOCK:
-        if os.path.exists(USER_DB_FILE):
-            try:
-                with open(USER_DB_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if "banned_ips" not in data: data["banned_ips"] = []
-                    if "system_announcement" not in data: data["system_announcement"] = ""
-                    if "feedback_reports" not in data: data["feedback_reports"] = []
-                    return data
-            except Exception:
-                return {"users": {}, "banned_ips": [], "system_announcement": "", "feedback_reports": []}
-        return {"users": {}, "banned_ips": [], "system_announcement": "", "feedback_reports": []}
+  with DB_LOCK:
+    if os.path.exists(USER_DB_FILE):
+      try:
+        with open(USER_DB_FILE, "r", encoding="utf-8") as f:
+          data = json.load(f)
+          if "banned_ips" not in data:
+            data["banned_ips"] = []
+          if "system_announcement" not in data:
+            data["system_announcement"] = ""
+          if "feedback_reports" not in data:
+            data["feedback_reports"] = []
+          return data
+      except Exception:
+        return {
+            "users": {},
+            "banned_ips": [],
+            "system_announcement": "",
+            "feedback_reports": [],
+        }
+    return {
+        "users": {},
+        "banned_ips": [],
+        "system_announcement": "",
+        "feedback_reports": [],
+    }
+
 
 def save_database(db: dict):
-    with DB_LOCK:
-        with open(USER_DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(db, f, indent=4)
+  with DB_LOCK:
+    with open(USER_DB_FILE, "w", encoding="utf-8") as f:
+      json.dump(db, f, indent=4)
+
 
 def sanitize(text: str) -> str:
-    return html.escape(str(text))
+  return html.escape(str(text))
+
 
 def get_client_ip() -> str:
-    try:
-        ctx = st.runtime.scriptrunner.get_script_run_ctx()
-        if ctx and hasattr(ctx, "headers"):
-            forwarded = ctx.headers.get("X-Forwarded-For")
-            if forwarded: return forwarded.split(",")[0].strip()
-            return ctx.headers.get("Remote-Addr", "127.0.0.1")
-    except Exception:
-        pass
-    return "127.0.0.1"
+  try:
+    ctx = st.runtime.scriptrunner.get_script_run_ctx()
+    if ctx and hasattr(ctx, "headers"):
+      forwarded = ctx.headers.get("X-Forwarded-For")
+      if forwarded:
+        return forwarded.split(",")[0].strip()
+      return ctx.headers.get("Remote-Addr", "127.0.0.1")
+  except Exception:
+    pass
+  return "127.0.0.1"
+
 
 def fetch_sponsor_segments(video_id: str) -> list:
-    url = f"https://sponsor.ajay.app/api/skipSegments?videoID={video_id}"
-    try:
-        res = requests.get(url, timeout=2)
-        if res.status_code == 200: return res.json()
-    except Exception:
-        pass
-    return []
+  url = f"https://sponsor.ajay.app/api/skipSegments?videoID={video_id}"
+  try:
+    res = requests.get(url, timeout=2)
+    if res.status_code == 200:
+      return res.json()
+  except Exception:
+    pass
+  return []
+
 
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = None
-if "feed_type" not in st.session_state: st.session_state.feed_type = "normal"
-if "audio_only" not in st.session_state: st.session_state.audio_only = False
-if "platform_source" not in st.session_state: st.session_state.platform_source = "YouTube"
-if "app_language" not in st.session_state: st.session_state.app_language = "English (EN)"
+  st.session_state.logged_in = False
+  st.session_state.username = None
+if "feed_type" not in st.session_state:
+  st.session_state.feed_type = "normal"
+if "audio_only" not in st.session_state:
+  st.session_state.audio_only = False
+if "platform_source" not in st.session_state:
+  st.session_state.platform_source = "YouTube"
+if "app_language" not in st.session_state:
+  st.session_state.app_language = "English (EN)"
 
 db_master = load_database()
 client_ip = get_client_ip()
 if client_ip in db_master.get("banned_ips", []):
-    st.error("🛑 ACCESS DENIED: Your IP address has been restricted.")
-    st.stop()
+  st.error("🛑 ACCESS DENIED: Your IP address has been restricted.")
+  st.stop()
+
 
 def auth_screen():
-    selected_lang = st.selectbox("🌍 Language / Sprache", list(TRANSLATIONS.keys()))
-    st.session_state.app_language = selected_lang
-    st.title(t("access_portal"))
-    choice = st.radio(t("matrix_access"), [t("login"), t("create_account")])
+  selected_lang = st.selectbox(
+      "🌍 Language / Sprache", list(TRANSLATIONS.keys())
+  )
+  st.session_state.app_language = selected_lang
+  st.title(t("access_portal"))
+  choice = st.radio(t("matrix_access"), [t("login"), t("create_account")])
 
-    if choice == t("login"):
-        with st.form("login_form"):
-            username_input = sanitize(st.text_input(t("user_id")).strip().lower())
-            password_input = st.text_input(t("security_key"), type="password")
-            submit = st.form_submit_button(t("auth_node"))
-            if submit:
-                db = load_database()
-                users = db.get("users", {})
-                if username_input in users:
-                    stored_hash = users[username_input]["password_hash"]
-                    salt_hex = users[username_input]["salt"]
-                    calc_hash, _ = hash_password(password_input, salt_hex)
-                    if secrets.compare_digest(stored_hash, calc_hash):
-                        st.session_state.logged_in = True
-                        st.session_state.username = username_input
-                        st.rerun()
-                    else:
-                        st.error("Authentication failed: Invalid credentials.")
-                else:
-                    st.error("Authentication failed: User node does not exist.")
-    else:
-        with st.form("register_form"):
-            new_user = sanitize(st.text_input(t("user_id")).strip().lower())
-            new_pass = st.text_input(t("security_key"), type="password")
-            confirm_pass = st.text_input(t("confirm_key"), type="password")
-            reg_submit = st.form_submit_button(t("init_node"))
-            if reg_submit:
-                db = load_database()
-                users = db.setdefault("users", {})
-                if not new_user or not new_pass: st.error("Fields cannot be empty.")
-                elif new_user in users: st.error("User node ID already exists.")
-                elif new_pass != confirm_pass: st.error("Security keys do not match.")
-                else:
-                    p_hash, salt_hex = hash_password(new_pass)
-                    is_admin_flag = (new_user == ADMIN_USERNAME)
-                    users[new_user] = {
-                        "password_hash": p_hash,
-                        "salt": salt_hex,
-                        "history": [],
-                        "playlists": [],
-                        "is_premium": is_admin_flag,
-                        "is_admin": is_admin_flag,
-                        "custom_genres": {}
-                    }
-                    save_database(db)
-                    st.success("Account successfully initialized! Switch to Log In.")
+  if choice == t("login"):
+    with st.form("login_form"):
+      username_input = sanitize(st.text_input(t("user_id")).strip().lower())
+      password_input = st.text_input(t("security_key"), type="password")
+      submit = st.form_submit_button(t("auth_node"))
+      if submit:
+        db = load_database()
+        users = db.get("users", {})
+        if username_input in users:
+          stored_hash = users[username_input]["password_hash"]
+          salt_hex = users[username_input]["salt"]
+          calc_hash, _ = hash_password(password_input, salt_hex)
+          if secrets.compare_digest(stored_hash, calc_hash):
+            st.session_state.logged_in = True
+            st.session_state.username = username_input
+            st.rerun()
+          else:
+            st.error("Authentication failed: Invalid credentials.")
+        else:
+          st.error("Authentication failed: User node does not exist.")
+  else:
+    with st.form("register_form"):
+      new_user = sanitize(st.text_input(t("user_id")).strip().lower())
+      new_pass = st.text_input(t("security_key"), type="password")
+      confirm_pass = st.text_input(t("confirm_key"), type="password")
+      reg_submit = st.form_submit_button(t("init_node"))
+      if reg_submit:
+        db = load_database()
+        users = db.setdefault("users", {})
+        if not new_user or not new_pass:
+          st.error("Fields cannot be empty.")
+        elif new_user in users:
+          st.error("User node ID already exists.")
+        elif new_pass != confirm_pass:
+          st.error("Security keys do not match.")
+        else:
+          p_hash, salt_hex = hash_password(new_pass)
+          is_admin_flag = new_user == ADMIN_USERNAME
+          users[new_user] = {
+              "password_hash": p_hash,
+              "salt": salt_hex,
+              "history": [],
+              "playlists": [],
+              "is_premium": is_admin_flag,
+              "is_admin": is_admin_flag,
+              "custom_genres": {},
+          }
+          save_database(db)
+          st.success("Account successfully initialized! Switch to Log In.")
+
 
 if not st.session_state.logged_in:
-    auth_screen()
+  auth_screen()
 else:
-    current_user = st.session_state.username
-    db = load_database()
-    users = db.setdefault("users", {})
+  current_user = st.session_state.username
+  db = load_database()
+  users = db.setdefault("users", {})
 
-    if current_user == ADMIN_USERNAME and current_user in users:
-        users[current_user]["is_admin"] = True
-        users[current_user]["is_premium"] = True
+  if current_user == ADMIN_USERNAME and current_user in users:
+    users[current_user]["is_admin"] = True
+    users[current_user]["is_premium"] = True
+    save_database(db)
+
+  user_data = users.get(
+      current_user,
+      {
+          "history": [],
+          "playlists": [],
+          "is_premium": False,
+          "is_admin": False,
+          "custom_genres": {},
+      },
+  )
+  is_premium = user_data.get("is_premium", False)
+  is_admin = user_data.get("is_admin", False) or (
+      current_user == ADMIN_USERNAME
+  )
+
+  if "user_history" not in st.session_state:
+    st.session_state.user_history = user_data.get("history", [])
+
+  with st.sidebar:
+    selected_lang = st.selectbox(
+        "🌍 Language / Sprache", list(TRANSLATIONS.keys())
+    )
+    st.session_state.app_language = selected_lang
+
+    st.write(f"{t('active_node')}: **{current_user.upper()}**")
+    if is_admin:
+      st.markdown(
+          '<span class="admin-badge">SUPER ADMIN</span>', unsafe_allow_html=True
+      )
+    elif is_premium:
+      st.markdown(
+          '<span class="premium-badge">PRO ACTIVE</span>',
+          unsafe_allow_html=True,
+      )
+    else:
+      st.write(t("status_std"))
+
+    if st.button(t("terminate_session")):
+      db = load_database()
+      if current_user in db.get("users", {}):
+        db["users"][current_user]["history"] = st.session_state.user_history
         save_database(db)
+      st.session_state.logged_in = False
+      st.session_state.username = None
+      st.session_state.pop("user_history", None)
+      st.rerun()
 
-    user_data = users.get(current_user, {"history": [], "playlists": [], "is_premium": False, "is_admin": False, "custom_genres": {}})
-    is_premium = user_data.get("is_premium", False)
-    is_admin = user_data.get("is_admin", False) or (current_user == ADMIN_USERNAME)
+    if is_admin:
+      st.divider()
+      st.markdown(f"### {t('admin_center')}")
+      with st.expander(t("manage_accounts"), expanded=False):
+        all_users = list(db.get("users", {}).keys())
+        target_user = st.selectbox(t("select_node"), all_users)
+        if target_user and target_user != ADMIN_USERNAME:
+          t_data = db["users"][target_user]
+          current_status = "Pro" if t_data.get("is_premium") else "Standard"
+          st.write(f"Target Status: **{current_status}**")
+          col_a1, col_a2 = st.columns(2)
+          with col_a1:
+            if st.button(t("toggle_pro")):
+              db["users"][target_user]["is_premium"] = not t_data.get(
+                  "is_premium", False
+              )
+              save_database(db)
+              st.success("Updated status!")
+              st.rerun()
+          with col_a2:
+            if st.button(t("delete_user"), type="primary"):
+              del db["users"][target_user]
+              save_database(db)
+              st.warning("Deleted account.")
+              st.rerun()
+        st.markdown("---")
+        if st.button(t("promote_all")):
+          for u in db["users"]:
+            db["users"][u]["is_premium"] = True
+          save_database(db)
+          st.success("All promoted to Pro!")
+          st.rerun()
 
-    if "user_history" not in st.session_state:
-        st.session_state.user_history = user_data.get("history", [])
-
-    with st.sidebar:
-        selected_lang = st.selectbox("🌍 Language / Sprache", list(TRANSLATIONS.keys()))
-        st.session_state.app_language = selected_lang
-
-        st.write(f"{t('active_node')}: **{current_user.upper()}**")
-        if is_admin: st.markdown('<span class="admin-badge">SUPER ADMIN</span>', unsafe_allow_html=True)
-        elif is_premium: st.markdown('<span class="premium-badge">PRO ACTIVE</span>', unsafe_allow_html=True)
-        else: st.write(t("status_std"))
-
-        if st.button(t("terminate_session")):
-            db = load_database()
-            if current_user in db.get("users", {}):
-                db["users"][current_user]["history"] = st.session_state.user_history
-                save_database(db)
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.session_state.pop("user_history", None)
+      with st.expander(t("ip_security"), expanded=False):
+        st.write(f"Current IP: `{client_ip}`")
+        banned_list = db.setdefault("banned_ips", [])
+        ban_input = st.text_input(t("enter_ip"))
+        if st.button(t("execute_ban")):
+          if ban_input and ban_input not in banned_list:
+            banned_list.append(ban_input.strip())
+            save_database(db)
+            st.success("IP restricted.")
+            st.rerun()
+        if banned_list:
+          unban_target = st.selectbox(t("remove_ban"), banned_list)
+          if st.button(t("lift_ban")):
+            banned_list.remove(unban_target)
+            save_database(db)
+            st.success("Restriction lifted.")
             st.rerun()
 
-        if is_admin:
-            st.divider()
-            st.markdown(f"### {t('admin_center')}")
-            with st.expander(t("manage_accounts"), expanded=False):
-                all_users = list(db.get("users", {}).keys())
-                target_user = st.selectbox(t("select_node"), all_users)
-                if target_user and target_user != ADMIN_USERNAME:
-                    t_data = db["users"][target_user]
-                    current_status = "Pro" if t_data.get("is_premium") else "Standard"
-                    st.write(f"Target Status: **{current_status}**")
-                    col_a1, col_a2 = st.columns(2)
-                    with col_a1:
-                        if st.button(t("toggle_pro")):
-                            db["users"][target_user]["is_premium"] = not t_data.get("is_premium", False)
-                            save_database(db)
-                            st.success("Updated status!")
-                            st.rerun()
-                    with col_a2:
-                        if st.button(t("delete_user"), type="primary"):
-                            del db["users"][target_user]
-                            save_database(db)
-                            st.warning("Deleted account.")
-                            st.rerun()
-                st.markdown("---")
-                if st.button(t("promote_all")):
-                    for u in db["users"]: db["users"][u]["is_premium"] = True
-                    save_database(db)
-                    st.success("All promoted to Pro!")
-                    st.rerun()
-
-            with st.expander(t("ip_security"), expanded=False):
-                st.write(f"Current IP: `{client_ip}`")
-                banned_list = db.setdefault("banned_ips", [])
-                ban_input = st.text_input(t("enter_ip"))
-                if st.button(t("execute_ban")):
-                    if ban_input and ban_input not in banned_list:
-                        banned_list.append(ban_input.strip())
-                        save_database(db)
-                        st.success("IP restricted.")
-                        st.rerun()
-                if banned_list:
-                    unban_target = st.selectbox(t("remove_ban"), banned_list)
-                    if st.button(t("lift_ban")):
-                        banned_list.remove(unban_target)
-                        save_database(db)
-                        st.success("Restriction lifted.")
-                        st.rerun()
-
-            with st.expander(t("feedback_inbox"), expanded=False):
-                feedback_list = db.get("feedback_reports", [])
-                st.write(f"Total: {len(feedback_list)}")
-                for idx, report in enumerate(feedback_list):
-                    st.markdown(f"""
+      with st.expander(t("feedback_inbox"), expanded=False):
+        feedback_list = db.get("feedback_reports", [])
+        st.write(f"Total: {len(feedback_list)}")
+        for idx, report in enumerate(feedback_list):
+          st.markdown(
+              f"""
                     <div class="feedback-card">
                         <b>From:</b> {report['user']} | <i>{report['timestamp']}</i><br>
                         <b>Msg:</b> {report['message']}
                     </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"Resolve #{idx}", key=f"clear_fb_{idx}"):
-                        feedback_list.pop(idx)
-                        db["feedback_reports"] = feedback_list
-                        save_database(db)
-                        st.rerun()
+                    """,
+              unsafe_allow_html=True,
+          )
+          if st.button(f"Resolve #{idx}", key=f"clear_fb_{idx}"):
+            feedback_list.pop(idx)
+            db["feedback_reports"] = feedback_list
+            save_database(db)
+            st.rerun()
 
-            with st.expander(t("broadcast_alert"), expanded=False):
-                curr_ann = db.get("system_announcement", "")
-                new_ann = st.text_area(t("broadcast_msg"), curr_ann)
-                col_b1, col_b2 = st.columns(2)
-                with col_b1:
-                    if st.button(t("publish_alert")):
-                        db["system_announcement"] = new_ann
-                        save_database(db)
-                        st.rerun()
-                with col_b2:
-                    if st.button(t("clear_alert")):
-                        db["system_announcement"] = ""
-                        save_database(db)
-                        st.rerun()
-
-            with st.expander(t("db_maint"), expanded=False):
-                raw_db_json = json.dumps(db, indent=4)
-                st.download_button(t("download_backup"), data=raw_db_json, file_name="iqube_backup.json", mime="application/json")
-                uploaded_backup = st.file_uploader(t("restore_db"), type=["json"])
-                if uploaded_backup is not None:
-                    try:
-                        restored_data = json.load(uploaded_backup)
-                        if "users" in restored_data:
-                            save_database(restored_data)
-                            st.success("Restored! Reloading...")
-                            st.rerun()
-                    except Exception:
-                        pass
-
-        st.divider()
-        st.subheader(t("source_platform"))
-        st.session_state.platform_source = st.selectbox("", ["YouTube", "PeerTube", "Odysee", "Twitch"])
-        st.session_state.audio_only = st.checkbox(t("audio_saver"))
-
-        st.divider()
-        st.subheader(t("feedback_title"))
-        with st.form("feedback_form"):
-            fb_msg = st.text_area("", placeholder=t("feedback_placeholder"))
-            fb_submit = st.form_submit_button(t("submit_admin"))
-            if fb_submit and fb_msg.strip():
-                db_node = load_database()
-                reports = db_node.setdefault("feedback_reports", [])
-                reports.append({
-                    "user": current_user,
-                    "message": sanitize(fb_msg.strip()),
-                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                })
-                save_database(db_node)
-                st.success("Submitted successfully!")
-
-        st.divider()
-        api_key = st.text_input("YouTube API Key", type="password")
-
-        st.divider()
-        st.subheader(t("import_sub"))
-        uploaded_file = st.file_uploader(t("upload_json"), type=["json"])
-        if uploaded_file is not None: st.success("Imported!")
-
-        export_data = json.dumps({"history": st.session_state.user_history, "playlists": user_data.get("playlists", [])})
-        st.download_button(t("export_profile"), data=export_data, file_name=f"{current_user}_iqube.json", mime="application/json")
-
-        if not is_premium:
-            st.divider()
-            st.subheader(t("unlock_pro"))
-            license_key = st.text_input(t("enter_license"), type="password")
-            if st.button(t("activate_pro")):
-                if license_key == PREMIUM_KEY_VALID:
-                    db = load_database()
-                    db["users"][current_user]["is_premium"] = True
-                    save_database(db)
-                    st.success("Pro Unlocked!")
-                    st.rerun()
-
-    st.title(t("title"))
-    announcement = db.get("system_announcement", "")
-    if announcement:
-        st.markdown(f'<div class="broadcast-banner">📢 {sanitize(announcement)}</div>', unsafe_allow_html=True)
-
-    top_search = st.text_input(t("global_search"), placeholder=t("search_placeholder"), key="global_top_search_bar")
-
-    def fetch_videos(api_key, query, feed_type="normal", max_results=6):
-        if not api_key: return []
-        try:
-            youtube = build("youtube", "v3", developerKey=api_key)
-            params = {"q": query, "part": "id,snippet", "type": "video", "maxResults": max_results}
-            if feed_type == "shorts": params["videoDuration"] = "short"
-            elif feed_type == "live": params["eventType"] = "live"
-            else: params["videoDuration"] = "long"
-
-            res = youtube.search().list(**params).execute()
-            video_ids = [item["id"]["videoId"] for item in res.get("items", []) if "videoId" in item["id"]]
-            if not video_ids: return []
-
-            stats = youtube.videos().list(part="statistics,snippet", id=",".join(video_ids)).execute()
-            videos = []
-            for item in stats.get("items", []):
-                videos.append({
-                    "id": item["id"],
-                    "title": sanitize(item["snippet"]["title"]),
-                    "channel": sanitize(item["snippet"]["channelTitle"]),
-                    "views": int(item["statistics"].get("viewCount", 0))
-                })
-            return videos
-        except Exception as e:
-            st.error(f"API Error: {e}")
-            return []
-
-    tab1, tab2, tab3 = st.tabs([t("tab_recs"), t("tab_deep"), t("tab_pro")])
-
-    with tab1:
-        col_b1, col_b2, col_b3 = st.columns(3)
+      with st.expander(t("broadcast_alert"), expanded=False):
+        curr_ann = db.get("system_announcement", "")
+        new_ann = st.text_area(t("broadcast_msg"), curr_ann)
+        col_b1, col_b2 = st.columns(2)
         with col_b1:
-            if st.button(t("normal_feed")): st.session_state.feed_type = "normal"; st.rerun()
+          if st.button(t("publish_alert")):
+            db["system_announcement"] = new_ann
+            save_database(db)
+            st.rerun()
         with col_b2:
-            if st.button(t("shorts_feed")): st.session_state.feed_type = "shorts"; st.rerun()
-        with col_b3:
-            if st.button(t("live_feed")): st.session_state.feed_type = "live"; st.rerun()
+          if st.button(t("clear_alert")):
+            db["system_announcement"] = ""
+            save_database(db)
+            st.rerun()
 
-        recent = " ".join(st.session_state.user_history[-3:])
-        genres = {
-            "💻 Tech & Code": f"programming software code {recent}",
-            "🎮 Gaming & Dev": f"gamedev indie game {recent}",
-        }
-        if is_premium:
-            for c_name, c_query in user_data.get("custom_genres", {}).items():
-                genres[f"⭐ {sanitize(c_name)}"] = f"{c_query} {recent}"
-
-        for g_name, g_query in genres.items():
-            with st.expander(f"{g_name}", expanded=True):
-                if api_key:
-                    recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type)
-                    for v in recs:
-                        c1, c2 = st.columns([4, 1])
-                        with c1:
-                            st.subheader(v["title"])
-                            st.write(f"**Channel:** {v['channel']} | **Views:** {v['views']:,}")
-                            sponsors = fetch_sponsor_segments(v["id"])
-                            if sponsors: st.caption(f"🛡️ SponsorBlock: Auto-skipped {len(sponsors)} segment(s).")
-                            player_url = f"https://piped.video/embed/{v['id']}?listen=1" if st.session_state.audio_only else f"https://piped.video/embed/{v['id']}"
-                            if st.button(t("stream_adfree") + f" [{v['id']}]", key=f"rec_{v['id']}"):
-                                components.iframe(player_url, height=200 if st.session_state.audio_only else 315)
-                        with c2:
-                            if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
-                                if v["title"] not in st.session_state.user_history:
-                                    st.session_state.user_history.append(v["title"])
-                                    db = load_database()
-                                    db["users"][current_user]["history"] = st.session_state.user_history
-                                    save_database(db)
-                                    st.rerun()
-                        st.divider()
-
-    with tab2:
-        st.header(t("tab_deep"))
-        search_query = top_search if top_search else "advanced python optimization"
-        if st.button(t("execute_search")) and api_key:
-            with st.spinner("Analyzing..."):
-                raw_vids = fetch_videos(api_key, search_query, max_results=10)
-                scored = []
-                terms = [t.lower() for t in search_query.split()]
-                for v in raw_vids:
-                    score = 0
-                    try:
-                        transcript = YouTubeTranscriptApi.get_transcript(v["id"])
-                        full_text = " ".join([e["text"] for e in transcript]).lower()
-                        for term in terms: score += full_text.count(term)
-                    except Exception: pass
-                    v["score"] = score
-                    scored.append(v)
-                st.session_state.search_res = sorted(scored, key=lambda x: x["score"], reverse=True)
-
-        if "search_res" in st.session_state:
-            for v in st.session_state.search_res:
-                c1, c2 = st.columns([4, 1])
-                with c1:
-                    st.subheader(v["title"])
-                    st.write(f"**Score:** {v['score']} | **Channel:** {v['channel']}")
-                    if is_premium:
-                        if st.checkbox(t("ai_summary"), key=f"sum_{v['id']}"):
-                            st.write(f"**AI Summary:** Matches `{search_query}` with high spoken keyword density.")
-                        st.markdown(f"[📥 **Pro Direct Download**](https://piped.video/watch?v={v['id']})")
-                    if st.button(t("stream_adfree") + f" ({v['id']})", key=f"s_rec_{v['id']}"):
-                        components.iframe(f"https://piped.video/embed/{v['id']}", height=315)
-                with c2:
-                    if st.button(t("train_profile"), key=f"s_cal_{v['id']}"):
-                        st.session_state.user_history.append(v["title"])
-                        db = load_database()
-                        db["users"][current_user]["history"] = st.session_state.user_history
-                        save_database(db)
-                        st.rerun()
-                st.divider()
-
-    with tab3:
-        st.header(t("tab_pro"))
-        if not is_premium: st.warning("⚠️ Enter Pro Key in sidebar.")
-        else:
-            st.success("🟢 Pro Tier Active.")
-            new_g_name = sanitize(st.text_input(t("custom_genre_name"), "Rust Systems"))
-            new_g_query = sanitize(st.text_input(t("custom_genre_query"), "rustlang memory management"))
-            if st.button(t("add_matrix")):
-                db = load_database()
-                customs = db["users"][current_user].get("custom_genres", {})
-                customs[new_g_name] = new_g_query
-                db["users"][current_user]["custom_genres"] = customs
-                save_database(db)
-                st.success("Added!")
-                st.rerun()
+      with st.expander(t("db_maint"), expanded=False):
+        raw_db_json = json.dumps(db, indent=4)
+        st.download_button(
+            t("download_backup"),
+            data=raw_db_json,
+            file_name="iqube_backup.json",
+            mime="application/json",
+        )
+        uploaded_backup = st.file_uploader(t("restore_db"), type=["json"])
+        if uploaded_backup is not None:
+          try:
+            restored_data = json.load(uploaded_backup)
+            if "users" in restored_data:
+              save_database(restored_data)
+              st.success("Restored! Reloading...")
+              st.rerun()
+          except Exception:
+            pass
 
     st.divider()
-    st.markdown(f"### {t('diagnostics')}")
-    b_tab1, b_tab2 = st.tabs([t("patchnotes_tab"), t("directory_tab")])
-    with b_tab1: st.markdown("#### 🟢 IQube v2.9.4 — Page Config Fixed (EN/DE)")
-    with b_tab2: st.markdown("#### 📋 Functionality Directory (English & German)")
+    st.subheader(t("source_platform"))
+    st.session_state.platform_source = st.selectbox(
+        "", ["YouTube", "PeerTube", "Odysee", "Twitch"]
+    )
+    st.session_state.audio_only = st.checkbox(t("audio_saver"))
+
+    st.divider()
+    st.subheader(t("feedback_title"))
+    with st.form("feedback_form"):
+      fb_msg = st.text_area("", placeholder=t("feedback_placeholder"))
+      fb_submit = st.form_submit_button(t("submit_admin"))
+      if fb_submit and fb_msg.strip():
+        db_node = load_database()
+        reports = db_node.setdefault("feedback_reports", [])
+        reports.append({
+            "user": current_user,
+            "message": sanitize(fb_msg.strip()),
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        save_database(db_node)
+        st.success("Submitted successfully!")
+
+    st.divider()
+    api_key = st.text_input("YouTube API Key", type="password")
+
+    st.divider()
+    st.subheader(t("import_sub"))
+    uploaded_file = st.file_uploader(t("upload_json"), type=["json"])
+    if uploaded_file is not None:
+      st.success("Imported!")
+
+    export_data = json.dumps({
+        "history": st.session_state.user_history,
+        "playlists": user_data.get("playlists", []),
+    })
+    st.download_button(
+        t("export_profile"),
+        data=export_data,
+        file_name=f"{current_user}_iqube.json",
+        mime="application/json",
+    )
+
+    if not is_premium:
+      st.divider()
+      st.subheader(t("unlock_pro"))
+      license_key = st.text_input(t("enter_license"), type="password")
+      if st.button(t("activate_pro")):
+        if license_key == PREMIUM_KEY_VALID:
+          db = load_database()
+          db["users"][current_user]["is_premium"] = True
+          save_database(db)
+          st.success("Pro Unlocked!")
+          st.rerun()
+
+  st.title(t("title"))
+  announcement = db.get("system_announcement", "")
+  if announcement:
+    st.markdown(
+        f'<div class="broadcast-banner">📢 {sanitize(announcement)}</div>',
+        unsafe_allow_html=True,
+    )
+
+  top_search = st.text_input(
+      t("global_search"),
+      placeholder=t("search_placeholder"),
+      key="global_top_search_bar",
+  )
+
+  def fetch_videos(api_key, query, feed_type="normal", max_results=6):
+    if not api_key:
+      return []
+    try:
+      youtube = build("youtube", "v3", developerKey=api_key)
+      params = {
+          "q": query,
+          "part": "id,snippet",
+          "type": "video",
+          "maxResults": max_results,
+      }
+      if feed_type == "shorts":
+        params["videoDuration"] = "short"
+      elif feed_type == "live":
+        params["eventType"] = "live"
+      else:
+        params["videoDuration"] = "long"
+
+      res = youtube.search().list(**params).execute()
+      video_ids = [
+          item["id"]["videoId"]
+          for item in res.get("items", [])
+          if "videoId" in item["id"]
+      ]
+      if not video_ids:
+        return []
+
+      stats = youtube.videos().list(
+          part="statistics,snippet", id=",".join(video_ids)
+      ).execute()
+      videos = []
+      for item in stats.get("items", []):
+        videos.append({
+            "id": item["id"],
+            "title": sanitize(item["snippet"]["title"]),
+            "channel": sanitize(item["snippet"]["channelTitle"]),
+            "views": int(item["statistics"].get("viewCount", 0)),
+        })
+      return videos
+    except Exception as e:
+      st.error(f"API Error: {e}")
+      return []
+
+  tab1, tab2, tab3 = st.tabs([t("tab_recs"), t("tab_deep"), t("tab_pro")])
+
+  with tab1:
+    col_b1, col_b2, col_b3 = st.columns(3)
+    with col_b1:
+      if st.button(t("normal_feed")):
+        st.session_state.feed_type = "normal"
+        st.rerun()
+    with col_b2:
+      if st.button(t("shorts_feed")):
+        st.session_state.feed_type = "shorts"
+        st.rerun()
+    with col_b3:
+      if st.button(t("live_feed")):
+        st.session_state.feed_type = "live"
+        st.rerun()
+
+    recent = " ".join(st.session_state.user_history[-3:])
+    genres = {
+        "💻 Tech & Code": f"programming software code {recent}",
+        "🎮 Gaming & Dev": f"gamedev indie game {recent}",
+    }
+    if is_premium:
+      for c_name, c_query in user_data.get("custom_genres", {}).items():
+        genres[f"⭐ {sanitize(c_name)}"] = f"{c_query} {recent}"
+
+    for g_name, g_query in genres.items():
+      with st.expander(f"{g_name}", expanded=True):
+        if api_key:
+          recs = fetch_videos(
+              api_key, g_query, feed_type=st.session_state.feed_type
+          )
+          for v in recs:
+            c1, c2 = st.columns([4, 1])
+            with c1:
+              st.subheader(v["title"])
+              st.write(
+                  f"**Channel:** {v['channel']} | **Views:** {v['views']:,}"
+              )
+              sponsors = fetch_sponsor_segments(v["id"])
+              if sponsors:
+                st.caption(
+                    f"🛡️ SponsorBlock: Auto-skipped {len(sponsors)} segment(s)."
+                )
+              player_url = (
+                  f"https://piped.video/embed/{v['id']}?listen=1"
+                  if st.session_state.audio_only
+                  else f"https://piped.video/embed/{v['id']}"
+              )
+              if st.button(
+                  t("stream_adfree") + f" [{v['id']}]", key=f"rec_{v['id']}"
+              ):
+                components.iframe(
+                    player_url,
+                    height=200 if st.session_state.audio_only else 315,
+                )
+            with c2:
+              if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
+                if v["title"] not in st.session_state.user_history:
+                  st.session_state.user_history.append(v["title"])
+                  db = load_database()
+                  db["users"][current_user]["history"] = (
+                      st.session_state.user_history
+                  )
+                  save_database(db)
+                  st.rerun()
+            st.divider()
+
+  with tab2:
+    st.header(t("tab_deep"))
+    search_query = (
+        top_search if top_search else "advanced python optimization"
+    )
+    if st.button(t("execute_search")) and api_key:
+      with st.spinner("Analyzing..."):
+        raw_vids = fetch_videos(api_key, search_query, max_results=10)
+        scored = []
+        terms = [t.lower() for t in search_query.split()]
+        for v in raw_vids:
+          score = 0
+          try:
+            transcript = YouTubeTranscriptApi.get_transcript(v["id"])
+            full_text = " ".join([e["text"] for e in transcript]).lower()
+            for term in terms:
+              score += full_text.count(term)
+          except Exception:
+            pass
+          v["score"] = score
+          scored.append(v)
+        st.session_state.search_res = sorted(
+            scored, key=lambda x: x["score"], reverse=True
+        )
+
+    if "search_res" in st.session_state:
+      for v in st.session_state.search_res:
+        c1, c2 = st.columns([4, 1])
+        with c1:
+          st.subheader(v["title"])
+          st.write(f"**Score:** {v['score']} | **Channel:** {v['channel']}")
+          if is_premium:
+            if st.checkbox(t("ai_summary"), key=f"sum_{v['id']}"):
+              st.write(
+                  f"**AI Summary:** Matches `{search_query}` with high spoken"
+                  " keyword density."
+              )
+            st.markdown(
+                f"[📥 **Pro Direct Download**](https://piped.video/watch?v={v['id']})"
+            )
+          if st.button(
+              t("stream_adfree") + f" ({v['id']})", key=f"s_rec_{v['id']}"
+          ):
+            components.iframe(
+                f"https://piped.video/embed/{v['id']}", height=315
+            )
+        with c2:
+          if st.button(t("train_profile"), key=f"s_cal_{v['id']}"):
+            st.session_state.user_history.append(v["title"])
+            db = load_database()
+            db["users"][current_user]["history"] = st.session_state.user_history
+            save_database(db)
+            st.rerun()
+        st.divider()
+
+  with tab3:
+    st.header(t("tab_pro"))
+    if not is_premium:
+      st.warning("⚠️ Enter Pro Key in sidebar.")
+    else:
+      st.success("🟢 Pro Tier Active.")
+      new_g_name = sanitize(
+          st.text_input(t("custom_genre_name"), "Rust Systems")
+      )
+      new_g_query = sanitize(
+          st.text_input(t("custom_genre_query"), "rustlang memory management")
+      )
+      if st.button(t("add_matrix")):
+        db = load_database()
+        customs = db["users"][current_user].get("custom_genres", {})
+        customs[new_g_name] = new_g_query
+        db["users"][current_user]["custom_genres"] = customs
+        save_database(db)
+        st.success("Added!")
+        st.rerun()
+
+  st.divider()
+  st.markdown(f"### {t('diagnostics')}")
+  b_tab1, b_tab2 = st.tabs([t("patchnotes_tab"), t("directory_tab")])
+  with b_tab1:
+    st.markdown("#### 🟢 IQube v2.9.5 — Strict Config Placement Edition")
+  with b_tab2:
+    st.markdown("#### 📋 Functionality Directory (English & German)")
