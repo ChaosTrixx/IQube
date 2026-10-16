@@ -421,7 +421,6 @@ if "audio_only" not in st.session_state: st.session_state.audio_only = False
 if "platform_source" not in st.session_state: st.session_state.platform_source = "YouTube"
 if "app_language" not in st.session_state: st.session_state.app_language = "English (EN)"
 
-# Initialize infinite batch counter tracking dictionary per genre rail
 if "rail_limits" not in st.session_state:
     st.session_state.rail_limits = {}
 
@@ -684,6 +683,8 @@ else:
 
     top_search = st.text_input(t("global_search"), placeholder=t("search_placeholder"), key="global_top_search_bar")
 
+    # --- CACHED FETCH FUNCTION TO PREVENT QUOTA EXHAUSTION (HTTP 429) ---
+    @st.cache_data(ttl=3600, show_spinner=False)
     def fetch_videos(api_key, query, feed_type="normal", max_results=12):
         if not api_key: return []
         try:
@@ -741,11 +742,10 @@ else:
         if not api_key:
             st.warning("⚠️ Please insert your YouTube API Key in the left sidebar to initialize matrix feed parsing.")
 
-        # --- ENDLESSLY REPLENISHING NETFLIX CINEMA RAILS ---
+        # --- CACHED & ENDLESSLY REPLENISHING NETFLIX CINEMA RAILS ---
         for g_name, g_query in genres.items():
             st.markdown(f'<div class="rail-header">{g_name}</div>', unsafe_allow_html=True)
             if api_key:
-                # Track how many items to display per rail (starts at 4, increments by 4 on endless load click)
                 current_rail_limit = st.session_state.rail_limits.get(g_name, 4)
                 
                 recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type, max_results=current_rail_limit)
@@ -803,7 +803,6 @@ else:
                                         st.rerun()
                             st.markdown('<div class="btn-desc">👍 Boost taste vs 🚫 Blacklist & reshuffle.</div>', unsafe_allow_html=True)
                     
-                    # Endless Replenishing Trigger Button per Rail
                     if st.button(t("load_more"), key=f"more_{g_name}"):
                         st.session_state.rail_limits[g_name] = current_rail_limit + 4
                         st.rerun()
@@ -903,9 +902,9 @@ else:
     with b_tab1:
         st.markdown("""
         #### 📜 Comprehensive IQube Version & Patch History Changelog
-        * **v2.10.14 (Current)**:
-          * **Endlessly Replenishing Stream (Infinite Scrolling)**: Added dynamic batch-inflation tracking (`rail_limits`) linked to an interactive injection action button beneath each genre rail to pull additional recommendations on demand.
-        * **v2.10.13 and Earlier**:
-          * Reverted video parameters, security hardening, button text descriptions, and persistent session states.
+        * **v2.10.15 (Current)**:
+          * **API Quota Protection (`st.cache_data`)**: Implemented 1-hour response caching on `fetch_videos` to prevent quota exhaustion (HTTP 429 errors) and speed up navigation.
+        * **v2.10.14**:
+          * Endlessly replenishing stream pagination (`rail_limits`).
         """)
     with b_tab2: st.markdown("#### 📋 System Functionality Directory (English & German)")
