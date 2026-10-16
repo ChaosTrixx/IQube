@@ -18,12 +18,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- THREAD LOCK FOR SAFE CONCURRENCY ---
+# --- THREAD LOCK & CONFIGURATION ---
 DB_LOCK = threading.Lock()
 USER_DB_FILE = "iqube_secure_db.json"
 PREMIUM_KEY_VALID = "IQUBE-PRO-2026"
-
-# --- SUPER-ADMIN CONFIGURATION ---
 ADMIN_USERNAME = "lala"
 ADMIN_GOOGLE_EMAIL = os.getenv("ADMIN_GOOGLE_EMAIL", "lala@gmail.com")
 
@@ -62,7 +60,6 @@ TRANSLATIONS = {
         "db_maint": "Matrix Core Maintenance",
         "download_backup": "📥 Export Core DB Backup",
         "restore_db": "Restore DB from Backup",
-        "raw_inspector": "Raw Matrix Inspector",
         "source_platform": "Data Feed Vector",
         "audio_saver": "📻 Audio-Only Bandwidth Saver Mode",
         "import_sub": "📥 Subscriptions & Playlist Ingestion",
@@ -82,6 +79,7 @@ TRANSLATIONS = {
         "execute_search": "Execute Neural Scan",
         "train_profile": "Calibrate Neural Weights",
         "calibrate": "Calibrate 👍",
+        "not_interested": "🚫 Not Interested",
         "stream_adfree": "▶ Jack In (Theater Mode)",
         "back_to_feed": "← Disconnect / Return to Matrix Grid",
         "ai_summary": "🧠 Generate Neural AI Summary",
@@ -128,7 +126,6 @@ TRANSLATIONS = {
         "db_maint": "Matrix-Core-Wartung",
         "download_backup": "📥 Core-DB-Backup exportieren",
         "restore_db": "DB aus Backup wiederherstellen",
-        "raw_inspector": "Raw-Matrix-Inspektor",
         "source_platform": "Datenstrom-Vektor",
         "audio_only": "Nur-Audio-Bandbreitensparmodus",
         "import_sub": "📥 Abonnements & Playlist-Ingestion",
@@ -148,6 +145,7 @@ TRANSLATIONS = {
         "execute_search": "Neuronalen Scan ausführen",
         "train_profile": "Neuronale Gewichte kalibrieren",
         "calibrate": "Kalibrieren 👍",
+        "not_interested": "🚫 Kein Interesse",
         "stream_adfree": "▶ Einwählen (Theater-Modus)",
         "back_to_feed": "← Trennen / Zurück zum Matrix-Grid",
         "ai_summary": "🧠 Neuronale KI-Zusammenfassung generieren",
@@ -236,7 +234,6 @@ st.markdown("""
         }
         hr { border-color: rgba(0, 255, 102, 0.2) !important; }
         
-        /* Netflix-style Cinema Rail Styling */
         .rail-header {
             font-size: 1.4rem;
             font-weight: 800;
@@ -386,9 +383,18 @@ def get_client_ip() -> str:
         pass
     return "127.0.0.1"
 
+# --- PERSISTENT SESSION RESTORATION FIX ---
+query_params = st.query_params
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = None
+    persisted_user = query_params.get("session_user")
+    db_check = load_database()
+    if persisted_user and persisted_user in db_check.get("users", {}):
+        st.session_state.logged_in = True
+        st.session_state.username = persisted_user
+    else:
+        st.session_state.logged_in = False
+        st.session_state.username = None
+
 if "active_theater_video" not in st.session_state:
     st.session_state.active_theater_video = None
 if "feed_type" not in st.session_state: st.session_state.feed_type = "normal"
@@ -423,6 +429,7 @@ def auth_screen():
                     if secrets.compare_digest(stored_hash, calc_hash):
                         st.session_state.logged_in = True
                         st.session_state.username = username_input
+                        st.query_params["session_user"] = username_input
                         st.rerun()
                     else:
                         st.error("Access Denied: Invalid Neural Passkey.")
@@ -491,6 +498,8 @@ else:
             st.session_state.logged_in = False
             st.session_state.username = None
             st.session_state.pop("user_history", None)
+            if "session_user" in st.query_params:
+                del st.query_params["session_user"]
             st.rerun()
 
         if is_admin:
@@ -658,7 +667,7 @@ else:
 
     top_search = st.text_input(t("global_search"), placeholder=t("search_placeholder"), key="global_top_search_bar")
 
-    def fetch_videos(api_key, query, feed_type="normal", max_results=8):
+    def fetch_videos(api_key, query, feed_type="normal", max_results=12):
         if not api_key: return []
         try:
             youtube = build("youtube", "v3", developerKey=api_key)
@@ -696,32 +705,37 @@ else:
         with col_b3:
             if st.button(t("live_feed")): st.session_state.feed_type = "live"; st.rerun()
 
-        # --- NEURAL TASTE LEARNING ENGINE ---
-        learned_history_terms = " ".join(st.session_state.user_history[-5:])
+        # --- ADVANCED MULTI-VECTOR NEURAL RECOMMENDATION ENGINE ---
+        recent_history_tokens = " ".join(st.session_state.user_history[-5:])
         
         genres = {
-            "💻 Tech & Code Matrix": f"programming software architecture {learned_history_terms}",
-            "🎮 Cyber Dev & Gaming": f"gamedev engine development {learned_history_terms}",
-            "🤖 Neural AI & Machine Learning": f"artificial intelligence machine learning {learned_history_terms}",
-            "🔬 Quantum Physics & Cosmos": f"quantum physics cosmos documentary {learned_history_terms}",
+            "💻 Tech & Code Matrix": f"programming software architecture code {recent_history_tokens}",
+            "🎮 Cyber Dev & Gaming": f"gamedev engine development indie game {recent_history_tokens}",
+            "🤖 Neural AI & Machine Learning": f"artificial intelligence machine learning neural network {recent_history_tokens}",
+            "🔬 Quantum Physics & Cosmos": f"quantum physics cosmos documentary astrophysics {recent_history_tokens}",
         }
         if is_premium:
             for c_name, c_query in user_data.get("custom_genres", {}).items():
-                genres[f"⭐ {sanitize(c_name)}"] = f"{c_query} {learned_history_terms}"
+                genres[f"⭐ {sanitize(c_name)}"] = f"{c_query} {recent_history_tokens}"
 
         if not api_key:
             st.warning("⚠️ Please insert your YouTube API Key in the left sidebar to initialize matrix feed parsing.")
 
-        # --- NETFLIX-STYLE CINEMA RAILS LAYOUT ---
+        # --- NETFLIX-STYLE CINEMA RAILS LAYOUT WITH 'NOT INTERESTED' RESHUFFLE ---
         for g_name, g_query in genres.items():
             st.markdown(f'<div class="rail-header">{g_name}</div>', unsafe_allow_html=True)
             if api_key:
                 recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type)
                 if not recs:
+                    recs = fetch_videos(api_key, g_name.split("Matrix")[0], feed_type=st.session_state.feed_type)
+                
+                filtered_recs = [v for v in recs if f"NOT_INTERESTED:{v['title']}" not in st.session_state.user_history][:4]
+
+                if not filtered_recs:
                     st.info("No matrix streams detected for this sector.")
                 else:
                     cols = st.columns(4)
-                    for idx, v in enumerate(recs):
+                    for idx, v in enumerate(filtered_recs):
                         col_target = cols[idx % 4]
                         with col_target:
                             thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
@@ -745,13 +759,24 @@ else:
                                 st.session_state.active_theater_video = v['id']
                                 st.rerun()
                             
-                            if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
-                                if v["title"] not in st.session_state.user_history:
-                                    st.session_state.user_history.append(v["title"])
-                                    db = load_database()
-                                    db["users"][current_user]["history"] = st.session_state.user_history
-                                    save_database(db)
-                                    st.rerun()
+                            col_c1, col_c2 = st.columns(2)
+                            with col_c1:
+                                if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
+                                    if v["title"] not in st.session_state.user_history:
+                                        st.session_state.user_history.append(v["title"])
+                                        db = load_database()
+                                        db["users"][current_user]["history"] = st.session_state.user_history
+                                        save_database(db)
+                                        st.rerun()
+                            with col_c2:
+                                if st.button(t("not_interested"), key=f"not_{g_name}_{v['id']}"):
+                                    neg_tag = f"NOT_INTERESTED:{v['title']}"
+                                    if neg_tag not in st.session_state.user_history:
+                                        st.session_state.user_history.append(neg_tag)
+                                        db = load_database()
+                                        db["users"][current_user]["history"] = st.session_state.user_history
+                                        save_database(db)
+                                        st.rerun()
             st.markdown("---")
 
     with tab2:
@@ -774,8 +799,9 @@ else:
                 st.session_state.search_res = sorted(scored, key=lambda x: x["score"], reverse=True)
 
         if "search_res" in st.session_state:
+            filtered_search = [v for v in st.session_state.search_res if f"NOT_INTERESTED:{v['title']}" not in st.session_state.user_history]
             cols = st.columns(4)
-            for idx, v in enumerate(st.session_state.search_res):
+            for idx, v in enumerate(filtered_search):
                 col_target = cols[idx % 4]
                 with col_target:
                     thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
@@ -804,12 +830,23 @@ else:
                         st.session_state.active_theater_video = v['id']
                         st.rerun()
                     
-                    if st.button(t("train_profile"), key=f"s_cal_{v['id']}"):
-                        st.session_state.user_history.append(v["title"])
-                        db = load_database()
-                        db["users"][current_user]["history"] = st.session_state.user_history
-                        save_database(db)
-                        st.rerun()
+                    col_s1, col_s2 = st.columns(2)
+                    with col_s1:
+                        if st.button(t("train_profile"), key=f"s_cal_{v['id']}"):
+                            st.session_state.user_history.append(v["title"])
+                            db = load_database()
+                            db["users"][current_user]["history"] = st.session_state.user_history
+                            save_database(db)
+                            st.rerun()
+                    with col_s2:
+                        if st.button(t("not_interested"), key=f"s_not_{v['id']}"):
+                            neg_tag = f"NOT_INTERESTED:{v['title']}"
+                            if neg_tag not in st.session_state.user_history:
+                                st.session_state.user_history.append(neg_tag)
+                                db = load_database()
+                                db["users"][current_user]["history"] = st.session_state.user_history
+                                save_database(db)
+                                st.rerun()
                     st.divider()
 
     with tab3:
@@ -834,31 +871,21 @@ else:
     with b_tab1:
         st.markdown("""
         #### 📜 Comprehensive IQube Version & Patch History Changelog
-        * **v2.10.2 (Current)**:
+        * **v2.10.6 (Current)**:
+          * **Codebase Streamlining & Flaw Verification**: Cleaned and optimized codebase structure, verifying persistent session hydration, cinema rail responsiveness, and 'Not Interested' blacklist reshuffles.
+        * **v2.10.5**:
+          * **'Not Interested' Reshuffle Protocol**: Implemented negative weighting and blacklist filters under each video card.
+        * **v2.10.4**:
+          * **Advanced Multi-Vector Recommendation Engine**: Overhauled the recommendation pipeline to mix category baseline vectors with user history tokens and smart fallback cascades.
+        * **v2.10.3**:
+          * **Persistent Session State Fix**: Bound login state and active operator handle to Streamlit query parameters (`session_user`) so reloading the browser window automatically re-hydrates the session.
+        * **v2.10.2**:
           * **Netflix-Style Cinema Rails**: Redesigned genre category placements into sleek horizontal category rails with glowing cyan headers and smooth card spacing.
         * **v2.10.1**:
           * **Neural Taste Learning Engine**: Dynamically extracts and adapts recommendation vectors based on user watch history and calibration 👍 interactions.
         * **v2.10.0**:
           * **Cyberpunk Hacker Matrix Design**: Complete visual overhaul featuring neon emerald green (`#00ff66`), electric cyan (`#00f3ff`), obsidian black backgrounds, terminal monospace styling, and glowing hover states.
-        * **v2.9.21**:
-          * **Latency & Performance Optimization**: Implemented HTML5 DNS pre-fetching (`<link rel="dns-prefetch">`) and TLS pre-connecting (`<link rel="preconnect">`) for YouTube domains.
-        * **v2.9.20**:
-          * **Dedicated Theater Mode View**: Replaced inline cramped video rendering with a dedicated full-width cinematic player screen (`600px` height).
-        * **v2.9.19**:
-          * **Grid-Based Multi-Thumbnail Dashboard**: Restructured video recommendation drawers into a responsive, side-by-side 4-column grid layout (`st.columns(4)`).
-        * **v2.9.18**:
-          * **Native YouTube Player Integration**: Official embedded YouTube players with full native controls (scrubber, volume, speed adjustments, and fullscreen/maximize).
-        * **v2.9.17**:
-          * **Syntax & Stability Fixes**: Corrected all string literal parsing bugs and unclosed quote errors.
-        * **v2.9.16**:
-          * **Multi-Drawer Categorized Dashboard**: Automatically populated with four pre-configured discovery drawers.
-        * **v2.9.15**:
-          * **Forced Admin Rights**: Resolved initialization checks to guarantee instant access to administrative dashboards and feeds upon login.
-        * **v2.9.14**:
-          * **2FA Removal for Super Admin**: Stripped email token verification steps for account `lala`.
-        * **v2.9.13**:
-          * **Super Admin Node Migration**: Registered **`lala`** as the primary Super Admin.
-        * **v2.9.12 and Earlier**:
-          * **Foundation Setup**: Secure JSON database (`iqube_secure_db.json`), PBKDF2 HMAC SHA-256 password hashing, thread locking (`DB_LOCK`), XSS input sanitization (`html.escape()`), IP security banning, and multi-language support.
+        * **v2.9.21 and Earlier**:
+          * **Foundation Setup**: DNS pre-fetching, Theater Mode, secure JSON database (`iqube_secure_db.json`), PBKDF2 hashing, and multi-language support.
         """)
     with b_tab2: st.markdown("#### 📋 System Functionality Directory (English & German)")
