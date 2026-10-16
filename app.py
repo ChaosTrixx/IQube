@@ -73,7 +73,7 @@ TRANSLATIONS = {
         "activate_pro": "Activate Elite Node",
         "global_search": "🔍 GLOBAL SPOKEN TRANSCRIPT NEURAL VECTOR SEARCH",
         "search_placeholder": "Scan transcript frequencies for keywords...",
-        "tab_recs": "🏠 Matrix Recommendations Grid",
+        "tab_recs": "🏠 Matrix Cinema Rails",
         "tab_deep": "⚡ Deep Transcript Scanner",
         "tab_pro": "💎 Elite Features",
         "normal_feed": "🎬 Standard Feed",
@@ -85,9 +85,9 @@ TRANSLATIONS = {
         "stream_adfree": "▶ Jack In (Theater Mode)",
         "back_to_feed": "← Disconnect / Return to Matrix Grid",
         "ai_summary": "🧠 Generate Neural AI Summary",
-        "custom_genre_name": "Custom Matrix Grid Name",
+        "custom_genre_name": "Custom Matrix Rail Name",
         "custom_genre_query": "Target Query Vector",
-        "add_matrix": "Compile Custom Grid Matrix",
+        "add_matrix": "Compile Custom Cinema Rail",
         "diagnostics": "🛠️ SYSTEM DIAGNOSTICS & CHRONOLOGS",
         "patchnotes_tab": "📜 Cyberpunk Matrix Changelog",
         "directory_tab": "📋 System Functionality Directory",
@@ -139,7 +139,7 @@ TRANSLATIONS = {
         "activate_pro": "Elite-Knoten aktivieren",
         "global_search": "🔍 GLOBALE SPRACHTRANSKRIPT-NEURONALE VEKTORSUCHE",
         "search_placeholder": "Transkript-Frequenzen durchsuchen...",
-        "tab_recs": "🏠 Matrix-Empfehlungs-Grid",
+        "tab_recs": "🏠 Matrix-Cinema-Rails",
         "tab_deep": "⚡ Deep-Transkript-Scanner",
         "tab_pro": "💎 Elite-Funktionen",
         "normal_feed": "🎬 Standard-Feed",
@@ -151,9 +151,9 @@ TRANSLATIONS = {
         "stream_adfree": "▶ Einwählen (Theater-Modus)",
         "back_to_feed": "← Trennen / Zurück zum Matrix-Grid",
         "ai_summary": "🧠 Neuronale KI-Zusammenfassung generieren",
-        "custom_genre_name": "Benutzerdefinierter Grid-Name",
+        "custom_genre_name": "Benutzerdefinierter Rail-Name",
         "custom_genre_query": "Ziel-Abfragevektor",
-        "add_matrix": "Benutzerdefinierte Grid-Matrix",
+        "add_matrix": "Benutzerdefinierte Cinema-Rail",
         "diagnostics": "🛠️ SYSTEMDIAGNOSE & CHRONOLOGS",
         "patchnotes_tab": "📜 Cyberpunk-Matrix-Changelog",
         "directory_tab": "📋 System-Funktionsverzeichnis",
@@ -176,7 +176,6 @@ st.markdown("""
     <link rel="dns-prefetch" href="https://googlevideo.com">
     
     <style>
-        /* --- CYBERPUNK MATRIX THEME OVERRIDES --- */
         .stApp {
             background-color: #000000 !important;
             background-image: 
@@ -186,13 +185,11 @@ st.markdown("""
             color: #00ff66 !important;
             font-family: 'Courier New', Courier, monospace !important;
         }
-        
         [data-testid="stSidebar"] {
             background-color: #020408 !important;
             border-right: 1px solid rgba(0, 255, 102, 0.2) !important;
             box-shadow: inset -5px 0 15px rgba(0, 255, 102, 0.05);
         }
-        
         div.stExpander, div.stForm {
             background: rgba(2, 8, 4, 0.8) !important;
             border: 1px solid rgba(0, 255, 102, 0.3) !important;
@@ -200,7 +197,6 @@ st.markdown("""
             box-shadow: 0 0 12px rgba(0, 255, 102, 0.1);
             backdrop-filter: blur(8px);
         }
-        
         .stButton>button {
             background: linear-gradient(135deg, #001a0a 0%, #003311 100%) !important;
             color: #00ff66 !important;
@@ -220,7 +216,6 @@ st.markdown("""
             box-shadow: 0 0 25px rgba(0, 255, 102, 0.8);
             transform: translateY(-1px);
         }
-        
         input, textarea, select {
             background-color: #010a04 !important;
             color: #00ff66 !important;
@@ -232,7 +227,6 @@ st.markdown("""
             border-color: #00f3ff !important;
             box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
         }
-        
         h1, h2, h3 {
             color: #00ff66 !important;
             font-family: 'Courier New', Courier, monospace !important;
@@ -240,8 +234,21 @@ st.markdown("""
             text-shadow: 0 0 12px rgba(0, 255, 102, 0.6);
             text-transform: uppercase;
         }
-        
         hr { border-color: rgba(0, 255, 102, 0.2) !important; }
+        
+        /* Netflix-style Cinema Rail Styling */
+        .rail-header {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #00f3ff !important;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            border-left: 4px solid #00f3ff;
+            padding-left: 12px;
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+        }
         
         .premium-badge {
             background: linear-gradient(135deg, #00f3ff 0%, #0066ff 100%);
@@ -280,7 +287,6 @@ st.markdown("""
             border-radius: 2px;
             font-size: 0.9em;
         }
-        
         .thumb-hover-container {
             position: relative;
             width: 100%;
@@ -379,15 +385,6 @@ def get_client_ip() -> str:
     except Exception:
         pass
     return "127.0.0.1"
-
-def fetch_sponsor_segments(video_id: str) -> list:
-    url = f"https://sponsor.ajay.app/api/skipSegments?videoID={video_id}"
-    try:
-        res = requests.get(url, timeout=2)
-        if res.status_code == 200: return res.json()
-    except Exception:
-        pass
-    return []
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -699,56 +696,63 @@ else:
         with col_b3:
             if st.button(t("live_feed")): st.session_state.feed_type = "live"; st.rerun()
 
-        recent = " ".join(st.session_state.user_history[-3:])
+        # --- NEURAL TASTE LEARNING ENGINE ---
+        learned_history_terms = " ".join(st.session_state.user_history[-5:])
         
         genres = {
-            "💻 Tech & Code Matrix": f"programming software architecture {recent}",
-            "🎮 Cyber Dev & Gaming": f"gamedev engine development {recent}",
-            "🤖 Neural AI & Machine Learning": f"artificial intelligence machine learning {recent}",
-            "🔬 Quantum Physics & Cosmos": f"quantum physics cosmos documentary {recent}",
+            "💻 Tech & Code Matrix": f"programming software architecture {learned_history_terms}",
+            "🎮 Cyber Dev & Gaming": f"gamedev engine development {learned_history_terms}",
+            "🤖 Neural AI & Machine Learning": f"artificial intelligence machine learning {learned_history_terms}",
+            "🔬 Quantum Physics & Cosmos": f"quantum physics cosmos documentary {learned_history_terms}",
         }
         if is_premium:
             for c_name, c_query in user_data.get("custom_genres", {}).items():
-                genres[f"⭐ {sanitize(c_name)}"] = f"{c_query} {recent}"
+                genres[f"⭐ {sanitize(c_name)}"] = f"{c_query} {learned_history_terms}"
 
         if not api_key:
             st.warning("⚠️ Please insert your YouTube API Key in the left sidebar to initialize matrix feed parsing.")
 
+        # --- NETFLIX-STYLE CINEMA RAILS LAYOUT ---
         for g_name, g_query in genres.items():
-            with st.expander(f"📁 MATRIX SECTOR: {g_name}", expanded=True):
-                if api_key:
-                    recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type)
-                    if not recs:
-                        st.info("No matrix streams detected for this sector.")
-                    else:
-                        cols = st.columns(4)
-                        for idx, v in enumerate(recs):
-                            col_target = cols[idx % 4]
-                            with col_target:
-                                thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
-                                hover_embed_url = f"https://www.youtube.com/embed/{v['id']}?autoplay=1&mute=1&loop=1&playlist={v['id']}&controls=0"
-                                st.markdown(f"""
-                                    <div class="thumb-hover-container">
-                                        <iframe src="{hover_embed_url}" allow="autoplay"></iframe>
-                                        <img src="{thumb_url}" alt="{v['title']}">
-                                    </div>
-                                """, unsafe_allow_html=True)
-                                
-                                st.markdown(f"**{v['title']}**")
-                                st.caption(f"CH: {v['channel']} | VIEWS: {v['views']:,}")
-                                
-                                if st.button(t("stream_adfree"), key=f"rec_{g_name}_{v['id']}"):
-                                    st.session_state.active_theater_video = v['id']
+            st.markdown(f'<div class="rail-header">{g_name}</div>', unsafe_allow_html=True)
+            if api_key:
+                recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type)
+                if not recs:
+                    st.info("No matrix streams detected for this sector.")
+                else:
+                    cols = st.columns(4)
+                    for idx, v in enumerate(recs):
+                        col_target = cols[idx % 4]
+                        with col_target:
+                            thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
+                            hover_embed_url = f"https://www.youtube.com/embed/{v['id']}?autoplay=1&mute=1&loop=1&playlist={v['id']}&controls=0"
+                            st.markdown(f"""
+                                <div class="thumb-hover-container">
+                                    <iframe src="{hover_embed_url}" allow="autoplay"></iframe>
+                                    <img src="{thumb_url}" alt="{v['title']}">
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown(f"**{v['title']}**")
+                            st.caption(f"CH: {v['channel']} | VIEWS: {v['views']:,}")
+                            
+                            if st.button(t("stream_adfree"), key=f"rec_{g_name}_{v['id']}"):
+                                if v["title"] not in st.session_state.user_history:
+                                    st.session_state.user_history.append(v["title"])
+                                    db = load_database()
+                                    db["users"][current_user]["history"] = st.session_state.user_history
+                                    save_database(db)
+                                st.session_state.active_theater_video = v['id']
+                                st.rerun()
+                            
+                            if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
+                                if v["title"] not in st.session_state.user_history:
+                                    st.session_state.user_history.append(v["title"])
+                                    db = load_database()
+                                    db["users"][current_user]["history"] = st.session_state.user_history
+                                    save_database(db)
                                     st.rerun()
-                                
-                                if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
-                                    if v["title"] not in st.session_state.user_history:
-                                        st.session_state.user_history.append(v["title"])
-                                        db = load_database()
-                                        db["users"][current_user]["history"] = st.session_state.user_history
-                                        save_database(db)
-                                        st.rerun()
-                                st.divider()
+            st.markdown("---")
 
     with tab2:
         st.header(t("tab_deep"))
@@ -792,6 +796,11 @@ else:
                         st.markdown(f"[📥 **Download Stream**](https://www.youtube.com/watch?v={v['id']})")
                     
                     if st.button(t("stream_adfree"), key=f"s_rec_{v['id']}"):
+                        if v["title"] not in st.session_state.user_history:
+                            st.session_state.user_history.append(v["title"])
+                            db = load_database()
+                            db["users"][current_user]["history"] = st.session_state.user_history
+                            save_database(db)
                         st.session_state.active_theater_video = v['id']
                         st.rerun()
                     
@@ -816,7 +825,7 @@ else:
                 customs[new_g_name] = new_g_query
                 db["users"][current_user]["custom_genres"] = customs
                 save_database(db)
-                st.success("Custom Grid Matrix Compiled!")
+                st.success("Custom Cinema Rail Compiled!")
                 st.rerun()
 
     st.divider()
@@ -825,7 +834,11 @@ else:
     with b_tab1:
         st.markdown("""
         #### 📜 Comprehensive IQube Version & Patch History Changelog
-        * **v2.10.0 (Current)**:
+        * **v2.10.2 (Current)**:
+          * **Netflix-Style Cinema Rails**: Redesigned genre category placements into sleek horizontal category rails with glowing cyan headers and smooth card spacing.
+        * **v2.10.1**:
+          * **Neural Taste Learning Engine**: Dynamically extracts and adapts recommendation vectors based on user watch history and calibration 👍 interactions.
+        * **v2.10.0**:
           * **Cyberpunk Hacker Matrix Design**: Complete visual overhaul featuring neon emerald green (`#00ff66`), electric cyan (`#00f3ff`), obsidian black backgrounds, terminal monospace styling, and glowing hover states.
         * **v2.9.21**:
           * **Latency & Performance Optimization**: Implemented HTML5 DNS pre-fetching (`<link rel="dns-prefetch">`) and TLS pre-connecting (`<link rel="preconnect">`) for YouTube domains.
