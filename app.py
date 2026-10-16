@@ -73,7 +73,7 @@ TRANSLATIONS = {
         "activate_pro": "Activate Pro Node",
         "global_search": "🔍 GLOBAL SPOKEN TRANSCRIPT VECTOR SEARCH",
         "search_placeholder": "Type any search term to scan transcripts...",
-        "tab_recs": "🏠 Recommendations Dashboard",
+        "tab_recs": "🏠 Recommendations Grid Dashboard",
         "tab_deep": "⚡ Deep Scan Engine",
         "tab_pro": "💎 Pro Features",
         "normal_feed": "🎬 Normal Feed",
@@ -82,13 +82,13 @@ TRANSLATIONS = {
         "execute_search": "Execute Deep Search Query",
         "train_profile": "Train Profile",
         "calibrate": "Calibrate 👍",
-        "stream_adfree": "▶ Stream Ad-Free",
+        "stream_adfree": "▶ Watch in App Player",
         "ai_summary": "🧠 Generate Neural AI Summary",
         "custom_genre_name": "Custom Genre Name",
         "custom_genre_query": "Custom Search Query",
         "add_matrix": "Add Custom Genre Matrix",
         "diagnostics": "🛠️ SYSTEM DIAGNOSTICS & CONTROL PANEL",
-        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.17 - Fixed Syntax)",
+        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.19 - Grid Dashboard Layout)",
         "directory_tab": "📋 Complete IQube Functionality Directory",
         "feedback_title": "🐛 Send Feedback / Bug Report",
         "feedback_placeholder": "Describe bug or request...",
@@ -138,7 +138,7 @@ TRANSLATIONS = {
         "activate_pro": "Pro-Knoten aktivieren",
         "global_search": "🔍 GLOBALE SPRACHTRANSKRIPT-VEKTORSUCHE",
         "search_placeholder": "Suchbegriff eingeben...",
-        "tab_recs": "🏠 Empfehlungs-Dashboard",
+        "tab_recs": "🏠 Empfehlungs-Grid-Dashboard",
         "tab_deep": "⚡ Deep-Scan-Engine",
         "tab_pro": "💎 Pro-Funktionen",
         "normal_feed": "🎬 Normaler Feed",
@@ -147,13 +147,13 @@ TRANSLATIONS = {
         "execute_search": "Deep-Suchanfrage ausführen",
         "train_profile": "Profil trainieren",
         "calibrate": "Kalibrieren 👍",
-        "stream_adfree": "▶ Werbefrei streamen",
+        "stream_adfree": "▶ In App abspielen",
         "ai_summary": "🧠 KI-Zusammenfassung generieren",
         "custom_genre_name": "Benutzerdefinierter Genre-Name",
         "custom_genre_query": "Benutzerdefinierte Suchanfrage",
         "add_matrix": "Genre-Matrix hinzufügen",
         "diagnostics": "🛠️ SYSTEMDIAGNOSE & KONTROLLPANEL",
-        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.17)",
+        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.19)",
         "directory_tab": "📋 Funktionsverzeichnis",
         "feedback_title": "🐛 Feedback / Fehlerbericht senden",
         "feedback_placeholder": "Fehler oder Wunsch beschreiben...",
@@ -188,6 +188,7 @@ st.markdown("""
             border-radius: 8px;
             overflow: hidden;
             border: 1px solid rgba(0, 243, 255, 0.2);
+            margin-bottom: 8px;
         }
         .thumb-hover-container img {
             position: absolute;
@@ -532,7 +533,7 @@ else:
 
     top_search = st.text_input(t("global_search"), placeholder=t("search_placeholder"), key="global_top_search_bar")
 
-    def fetch_videos(api_key, query, feed_type="normal", max_results=6):
+    def fetch_videos(api_key, query, feed_type="normal", max_results=8):
         if not api_key: return []
         try:
             youtube = build("youtube", "v3", developerKey=api_key)
@@ -591,42 +592,42 @@ else:
                     recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type)
                     if not recs:
                         st.info("No videos found for this query or API limit reached.")
-                    for v in recs:
-                        c1, c2 = st.columns([2, 1])
-                        with c1:
-                            thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
-                            hover_embed_url = f"https://piped.video/embed/{v['id']}?autoplay=1&mute=1&loop=1"
-                            st.markdown(f"""
-                                <div class="thumb-hover-container">
-                                    <iframe src="{hover_embed_url}" allow="autoplay"></iframe>
-                                    <img src="{thumb_url}" alt="{v['title']}">
-                                </div>
-                            """, unsafe_allow_html=True)
-                        with c2:
-                            st.subheader(v["title"])
-                            st.write(f"**Channel:** {v['channel']} | **Views:** {v['views']:,}")
-                            sponsors = fetch_sponsor_segments(v["id"])
-                            if sponsors: st.caption(f"🛡️ SponsorBlock: Auto-skipped {len(sponsors)} segment(s).")
-                            
-                            player_url = f"https://piped.video/embed/{v['id']}?listen=1" if st.session_state.audio_only else f"https://piped.video/embed/{v['id']}"
-                            if st.button(t("stream_adfree") + f" [{v['id']}]", key=f"rec_{v['id']}"):
-                                components.iframe(player_url, height=200 if st.session_state.audio_only else 315)
-                            
-                            if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
-                                if v["title"] not in st.session_state.user_history:
-                                    st.session_state.user_history.append(v["title"])
-                                    db = load_database()
-                                    db["users"][current_user]["history"] = st.session_state.user_history
-                                    save_database(db)
-                                    st.rerun()
-                        st.divider()
+                    else:
+                        cols = st.columns(4)
+                        for idx, v in enumerate(recs):
+                            col_target = cols[idx % 4]
+                            with col_target:
+                                thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
+                                hover_embed_url = f"https://www.youtube.com/embed/{v['id']}?autoplay=1&mute=1&loop=1&playlist={v['id']}&controls=0"
+                                st.markdown(f"""
+                                    <div class="thumb-hover-container">
+                                        <iframe src="{hover_embed_url}" allow="autoplay"></iframe>
+                                        <img src="{thumb_url}" alt="{v['title']}">
+                                    </div>
+                                """, unsafe_allow_html=True)
+                                
+                                st.markdown(f"**{v['title']}**")
+                                st.caption(f"{v['channel']} | {v['views']:,} views")
+                                
+                                native_player_url = f"https://www.youtube.com/embed/{v['id']}?autoplay=1&enablejsapi=1"
+                                if st.button(t("stream_adfree"), key=f"rec_{g_name}_{v['id']}"):
+                                    components.iframe(native_player_url, height=360)
+                                
+                                if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
+                                    if v["title"] not in st.session_state.user_history:
+                                        st.session_state.user_history.append(v["title"])
+                                        db = load_database()
+                                        db["users"][current_user]["history"] = st.session_state.user_history
+                                        save_database(db)
+                                        st.rerun()
+                                st.divider()
 
     with tab2:
         st.header(t("tab_deep"))
         search_query = top_search if top_search else "advanced python optimization"
         if (top_search or st.button(t("execute_search"))) and api_key:
             with st.spinner("Scanning transcripts & vector matrix..."):
-                raw_vids = fetch_videos(api_key, search_query, max_results=10)
+                raw_vids = fetch_videos(api_key, search_query, max_results=8)
                 scored = []
                 terms = [t.lower() for t in search_query.split()]
                 for v in raw_vids:
@@ -641,33 +642,38 @@ else:
                 st.session_state.search_res = sorted(scored, key=lambda x: x["score"], reverse=True)
 
         if "search_res" in st.session_state:
-            for v in st.session_state.search_res:
-                c1, c2 = st.columns([2, 1])
-                with c1:
+            cols = st.columns(4)
+            for idx, v in enumerate(st.session_state.search_res):
+                col_target = cols[idx % 4]
+                with col_target:
                     thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
-                    hover_embed_url = f"https://piped.video/embed/{v['id']}?autoplay=1&mute=1&loop=1"
+                    hover_embed_url = f"https://www.youtube.com/embed/{v['id']}?autoplay=1&mute=1&loop=1&playlist={v['id']}&controls=0"
                     st.markdown(f"""
                         <div class="thumb-hover-container">
                             <iframe src="{hover_embed_url}" allow="autoplay"></iframe>
                             <img src="{thumb_url}" alt="{v['title']}">
                         </div>
                     """, unsafe_allow_html=True)
-                with c2:
-                    st.subheader(v["title"])
-                    st.write(f"**Score:** {v['score']} | **Channel:** {v['channel']}")
+                    
+                    st.markdown(f"**{v['title']}**")
+                    st.caption(f"Score: {v['score']} | {v['channel']}")
+                    
                     if is_premium:
                         if st.checkbox(t("ai_summary"), key=f"sum_{v['id']}"):
-                            st.write(f"**AI Summary:** Matches `{search_query}` with high spoken keyword density.")
-                        st.markdown(f"[📥 **Pro Direct Download**](https://piped.video/watch?v={v['id']})")
-                    if st.button(t("stream_adfree") + f" ({v['id']})", key=f"s_rec_{v['id']}"):
-                        components.iframe(f"https://piped.video/embed/{v['id']}", height=315)
+                            st.write(f"Matches query with high density.")
+                        st.markdown(f"[📥 **Download**](https://www.youtube.com/watch?v={v['id']})")
+                    
+                    native_player_url = f"https://www.youtube.com/embed/{v['id']}?autoplay=1&enablejsapi=1"
+                    if st.button(t("stream_adfree"), key=f"s_rec_{v['id']}"):
+                        components.iframe(native_player_url, height=360)
+                    
                     if st.button(t("train_profile"), key=f"s_cal_{v['id']}"):
                         st.session_state.user_history.append(v["title"])
                         db = load_database()
                         db["users"][current_user]["history"] = st.session_state.user_history
                         save_database(db)
                         st.rerun()
-                st.divider()
+                    st.divider()
 
     with tab3:
         st.header(t("tab_pro"))
@@ -688,5 +694,5 @@ else:
     st.divider()
     st.markdown(f"### {t('diagnostics')}")
     b_tab1, b_tab2 = st.tabs([t("patchnotes_tab"), t("directory_tab")])
-    with b_tab1: st.markdown("#### 🟢 IQube v2.9.17 — Syntax Error Fixed & Multi-Drawer Feed")
+    with b_tab1: st.markdown("#### 🟢 IQube v2.9.19 — Grid-Based Multi-Thumbnail Dashboard Segments")
     with b_tab2: st.markdown("#### 📋 Functionality Directory (English & German)")
