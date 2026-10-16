@@ -86,6 +86,7 @@ TRANSLATIONS = {
         "custom_genre_name": "Custom Matrix Rail Name",
         "custom_genre_query": "Target Query Vector",
         "add_matrix": "Compile Custom Cinema Rail",
+        "load_more": "⚡ Inject Next Infinite Matrix Batch",
         "diagnostics": "🛠️ SYSTEM DIAGNOSTICS & CHRONOLOGS",
         "patchnotes_tab": "📜 Cyberpunk Matrix Changelog",
         "directory_tab": "📋 System Functionality Directory",
@@ -152,6 +153,7 @@ TRANSLATIONS = {
         "custom_genre_name": "Benutzerdefinierter Rail-Name",
         "custom_genre_query": "Ziel-Abfragevektor",
         "add_matrix": "Benutzerdefinierte Cinema-Rail",
+        "load_more": "⚡ Nächsten endlosen Matrix-Batch injizieren",
         "diagnostics": "🛠️ SYSTEMDIAGNOSE & CHRONOLOGS",
         "patchnotes_tab": "📜 Cyberpunk-Matrix-Changelog",
         "directory_tab": "📋 System-Funktionsverzeichnis",
@@ -418,6 +420,10 @@ if "feed_type" not in st.session_state: st.session_state.feed_type = "normal"
 if "audio_only" not in st.session_state: st.session_state.audio_only = False
 if "platform_source" not in st.session_state: st.session_state.platform_source = "YouTube"
 if "app_language" not in st.session_state: st.session_state.app_language = "English (EN)"
+
+# Initialize infinite batch counter tracking dictionary per genre rail
+if "rail_limits" not in st.session_state:
+    st.session_state.rail_limits = {}
 
 def auth_screen():
     selected_lang = st.selectbox("🌍 Language / Sprache", list(TRANSLATIONS.keys()))
@@ -735,15 +741,18 @@ else:
         if not api_key:
             st.warning("⚠️ Please insert your YouTube API Key in the left sidebar to initialize matrix feed parsing.")
 
-        # --- NETFLIX-STYLE CINEMA RAILS LAYOUT WITH BUTTON DESCRIPTIONS ---
+        # --- ENDLESSLY REPLENISHING NETFLIX CINEMA RAILS ---
         for g_name, g_query in genres.items():
             st.markdown(f'<div class="rail-header">{g_name}</div>', unsafe_allow_html=True)
             if api_key:
-                recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type)
-                if not recs:
-                    recs = fetch_videos(api_key, g_name.split("Matrix")[0], feed_type=st.session_state.feed_type)
+                # Track how many items to display per rail (starts at 4, increments by 4 on endless load click)
+                current_rail_limit = st.session_state.rail_limits.get(g_name, 4)
                 
-                filtered_recs = [v for v in recs if f"NOT_INTERESTED:{v['title']}" not in st.session_state.user_history][:4]
+                recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type, max_results=current_rail_limit)
+                if not recs:
+                    recs = fetch_videos(api_key, g_name.split("Matrix")[0], feed_type=st.session_state.feed_type, max_results=current_rail_limit)
+                
+                filtered_recs = [v for v in recs if f"NOT_INTERESTED:{v['title']}" not in st.session_state.user_history]
 
                 if not filtered_recs:
                     st.info("No matrix streams detected for this sector.")
@@ -793,6 +802,11 @@ else:
                                         save_database(db)
                                         st.rerun()
                             st.markdown('<div class="btn-desc">👍 Boost taste vs 🚫 Blacklist & reshuffle.</div>', unsafe_allow_html=True)
+                    
+                    # Endless Replenishing Trigger Button per Rail
+                    if st.button(t("load_more"), key=f"more_{g_name}"):
+                        st.session_state.rail_limits[g_name] = current_rail_limit + 4
+                        st.rerun()
             st.markdown("---")
 
     with tab2:
@@ -889,9 +903,9 @@ else:
     with b_tab1:
         st.markdown("""
         #### 📜 Comprehensive IQube Version & Patch History Changelog
-        * **v2.10.13 (Current)**:
-          * **Removed Ultra-HD Upscaling**: Reverted video iframe parameters back to standard streaming configuration while retaining zero-latency DNS pre-fetching, security hardening, and button explanations.
-        * **v2.10.11 & v2.10.12**:
-          * Security hardening, constant-time checks, atomic writes, and firewall rules.
+        * **v2.10.14 (Current)**:
+          * **Endlessly Replenishing Stream (Infinite Scrolling)**: Added dynamic batch-inflation tracking (`rail_limits`) linked to an interactive injection action button beneath each genre rail to pull additional recommendations on demand.
+        * **v2.10.13 and Earlier**:
+          * Reverted video parameters, security hardening, button text descriptions, and persistent session states.
         """)
     with b_tab2: st.markdown("#### 📋 System Functionality Directory (English & German)")
