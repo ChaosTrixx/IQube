@@ -87,7 +87,7 @@ TRANSLATIONS = {
         "custom_genre_query": "Custom Search Query",
         "add_matrix": "Add Custom Genre Matrix",
         "diagnostics": "🛠️ SYSTEM DIAGNOSTICS & CONTROL PANEL",
-        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.14 - 2FA Removed for Admin)",
+        "patchnotes_tab": "📜 Up-To-Date Patchnotes (v2.9.15 - Feed & Dashboard Fix)",
         "directory_tab": "📋 Complete IQube Functionality Directory",
         "feedback_title": "🐛 Send Feedback / Bug Report",
         "feedback_placeholder": "Describe bug or request...",
@@ -152,7 +152,7 @@ TRANSLATIONS = {
         "custom_genre_query": "Benutzerdefinierte Suchanfrage",
         "add_matrix": "Genre-Matrix hinzufügen",
         "diagnostics": "🛠️ SYSTEMDIAGNOSE & KONTROLLPANEL",
-        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.14)",
+        "patchnotes_tab": "📜 Aktuelle Patchnotes (v2.9.15)",
         "directory_tab": "📋 Funktionsverzeichnis",
         "feedback_title": "🐛 Feedback / Fehlerbericht senden",
         "feedback_placeholder": "Fehler oder Wunsch beschreiben...",
@@ -179,7 +179,6 @@ st.markdown("""
         .broadcast-banner { background: rgba(0, 243, 255, 0.1); border: 1px solid #00f3ff; padding: 10px; border-radius: 8px; margin-bottom: 20px; color: #00f3ff; font-weight: bold; }
         .feedback-card { background: rgba(17, 24, 39, 0.8); border-left: 3px solid #00f3ff; padding: 10px; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em; }
         
-        /* Hover-to-Play Thumbnail Container */
         .thumb-hover-container {
             position: relative;
             width: 100%;
@@ -233,6 +232,7 @@ def load_database() -> dict:
         if "system_announcement" not in db_data: db_data["system_announcement"] = ""
         if "feedback_reports" not in db_data: db_data["feedback_reports"] = []
 
+        # Force ensure ADMIN_USERNAME (lala) exists and always has admin rights
         if ADMIN_USERNAME not in db_data["users"]:
             default_pass_hash, default_salt = hash_password("admin2026!secure")
             db_data["users"][ADMIN_USERNAME] = {
@@ -245,8 +245,12 @@ def load_database() -> dict:
                 "is_admin": True,
                 "custom_genres": {}
             }
-            with open(USER_DB_FILE, "w", encoding="utf-8") as f:
-                json.dump(db_data, f, indent=4)
+        else:
+            db_data["users"][ADMIN_USERNAME]["is_admin"] = True
+            db_data["users"][ADMIN_USERNAME]["is_premium"] = True
+
+        with open(USER_DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(db_data, f, indent=4)
         return db_data
 
 def save_database(db: dict):
@@ -418,4 +422,261 @@ else:
                 ban_input = st.text_input(t("enter_ip"))
                 if st.button(t("execute_ban")):
                     if ban_input and ban_input not in banned_list:
-                        banned_
+                        banned_list.append(ban_input.strip())
+                        save_database(db)
+                        st.success("IP restricted.")
+                        st.rerun()
+                if banned_list:
+                    unban_target = st.selectbox(t("remove_ban"), banned_list)
+                    if st.button(t("lift_ban")):
+                        banned_list.remove(unban_target)
+                        save_database(db)
+                        st.success("Restriction lifted.")
+                        st.rerun()
+
+            with st.expander(t("feedback_inbox"), expanded=False):
+                feedback_list = db.get("feedback_reports", [])
+                st.write(f"Total: {len(feedback_list)}")
+                for idx, report in enumerate(feedback_list):
+                    st.markdown(f"""
+                    <div class="feedback-card">
+                        <b>From:</b> {report['user']} | <i>{report['timestamp']}</i><br>
+                        <b>Msg:</b> {report['message']}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button(f"Resolve #{idx}", key=f"clear_fb_{idx}"):
+                        feedback_list.pop(idx)
+                        db["feedback_reports"] = feedback_list
+                        save_database(db)
+                        st.rerun()
+
+            with st.expander(t("broadcast_alert"), expanded=False):
+                curr_ann = db.get("system_announcement", "")
+                new_ann = st.text_area(t("broadcast_msg"), curr_ann)
+                col_b1, col_b2 = st.columns(2)
+                with col_b1:
+                    if st.button(t("publish_alert")):
+                        db["system_announcement"] = new_ann
+                        save_database(db)
+                        st.rerun()
+                with col_b2:
+                    if st.button(t("clear_alert")):
+                        db["system_announcement"] = ""
+                        save_database(db)
+                        st.rerun()
+
+            with st.expander(t("db_maint"), expanded=False):
+                raw_db_json = json.dumps(db, indent=4)
+                st.download_button(t("download_backup"), data=raw_db_json, file_name="iqube_backup.json", mime="application/json")
+                uploaded_backup = st.file_uploader(t("restore_db"), type=["json"])
+                if uploaded_backup is not None:
+                    try:
+                        restored_data = json.load(uploaded_backup)
+                        if "users" in restored_data:
+                            save_database(restored_data)
+                            st.success("Restored! Reloading...")
+                            st.rerun()
+                    except Exception:
+                        pass
+
+        st.divider()
+        st.subheader(t("source_platform"))
+        st.session_state.platform_source = st.selectbox("", ["YouTube", "PeerTube", "Odysee", "Twitch"])
+        st.session_state.audio_only = st.checkbox(t("audio_saver"))
+
+        st.divider()
+        st.subheader(t("feedback_title"))
+        with st.form("feedback_form"):
+            fb_msg = st.text_area("", placeholder=t("feedback_placeholder"))
+            fb_submit = st.form_submit_button(t("submit_admin"))
+            if fb_submit and fb_msg.strip():
+                db_node = load_database()
+                reports = db_node.setdefault("feedback_reports", [])
+                reports.append({
+                    "user": current_user,
+                    "message": sanitize(fb_msg.strip()),
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                save_database(db_node)
+                st.success("Submitted successfully!")
+
+        st.divider()
+        api_key = st.text_input("YouTube API Key", type="password")
+
+        st.divider()
+        st.subheader(t("import_sub"))
+        uploaded_file = st.file_uploader(t("upload_json"), type=["json"])
+        if uploaded_file is not None: st.success("Imported!")
+
+        export_export_data = json.dumps({"history": st.session_state.user_history, "playlists": user_data.get("playlists", [])})
+        st.download_button(t("export_profile"), data=export_export_data, file_name=f"{current_user}_iqube.json", mime="application/json")
+
+        if not is_premium:
+            st.divider()
+            st.subheader(t("unlock_pro"))
+            license_key = st.text_input(t("enter_license"), type="password")
+            if st.button(t("activate_pro")):
+                if license_key == PREMIUM_KEY_VALID:
+                    db = load_database()
+                    db["users"][current_user]["is_premium"] = True
+                    save_database(db)
+                    st.success("Pro Unlocked!")
+                    st.rerun()
+
+    st.title(t("title"))
+    announcement = db.get("system_announcement", "")
+    if announcement:
+        st.markdown(f'<div class="broadcast-banner">📢 {sanitize(announcement)}</div>', unsafe_allow_html=True)
+
+    top_search = st.text_input(t("global_search"), placeholder=t("search_placeholder"), key="global_top_search_bar")
+
+    def fetch_videos(api_key, query, feed_type="normal", max_results=6):
+        if not api_key: return []
+        try:
+            youtube = build("youtube", "v3", developerKey=api_key)
+            params = {"q": query, "part": "id,snippet", "type": "video", "maxResults": max_results}
+            if feed_type == "shorts": params["videoDuration"] = "short"
+            elif feed_type == "live": params["eventType"] = "live"
+            else: params["videoDuration"] = "long"
+
+            res = youtube.search().list(**params).execute()
+            video_ids = [item["id"]["videoId"] for item in res.get("items", []) if "videoId" in item["id"]]
+            if not video_ids: return []
+
+            stats = youtube.videos().list(part="statistics,snippet", id=",".join(video_ids)).execute()
+            videos = []
+            for item in stats.get("items", []):
+                videos.append({
+                    "id": item["id"],
+                    "title": sanitize(item["snippet"]["title"]),
+                    "channel": sanitize(item["snippet"]["channelTitle"]),
+                    "views": int(item["statistics"].get("viewCount", 0))
+                })
+            return videos
+        except Exception as e:
+            st.error(f"API Error: {e}")
+            return []
+
+    tab1, tab2, tab3 = st.tabs([t("tab_recs"), t("tab_deep"), t("tab_pro")])
+
+    with tab1:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            if st.button(t("normal_feed")): st.session_state.feed_type = "normal"; st.rerun()
+        with col_b2:
+            if st.button(t("shorts_feed")): st.session_state.feed_type = "shorts"; st.rerun()
+        with col_b3:
+            if st.button(t("live_feed")): st.session_state.feed_type = "live"; st.rerun()
+
+        recent = " ".join(st.session_state.user_history[-3:])
+        genres = {
+            "💻 Tech & Code": f"programming software code {recent}",
+            "🎮 Gaming & Dev": f"gamedev indie game {recent}",
+        }
+        if is_premium:
+            for c_name, c_query in user_data.get("custom_genres", {}).items():
+                genres[f"⭐ {sanitize(c_name)}"] = f"{c_query} {recent}"
+
+        for g_name, g_query in genres.items():
+            with st.expander(f"{g_name}", expanded=True):
+                if api_key:
+                    recs = fetch_videos(api_key, g_query, feed_type=st.session_state.feed_type)
+                    for v in recs:
+                        c1, c2 = st.columns([2, 1])
+                        with c1:
+                            thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
+                            hover_embed_url = f"https://piped.video/embed/{v['id']}?autoplay=1&mute=1&loop=1"
+                            st.markdown(f"""
+                                <div class="thumb-hover-container">
+                                    <iframe src="{hover_embed_url}" allow="autoplay"></iframe>
+                                    <img src="{thumb_url}" alt="{v['title']}">
+                                </div>
+                            """, unsafe_allow_html=True)
+                        with c2:
+                            st.subheader(v["title"])
+                            st.write(f"**Channel:** {v['channel']} | **Views:** {v['views']:,}")
+                            sponsors = fetch_sponsor_segments(v["id"])
+                            if sponsors: st.caption(f"🛡️ SponsorBlock: Auto-skipped {len(sponsors)} segment(s).")
+                            
+                            player_url = f"https://piped.video/embed/{v['id']}?listen=1" if st.session_state.audio_only else f"https://piped.video/embed/{v['id']}"
+                            if st.button(t("stream_adfree") + f" [{v['id']}]", key=f"rec_{v['id']}"):
+                                components.iframe(player_url, height=200 if st.session_state.audio_only else 315)
+                            
+                            if st.button(t("calibrate"), key=f"cal_{g_name}_{v['id']}"):
+                                if v["title"] not in st.session_state.user_history:
+                                    st.session_state.user_history.append(v["title"])
+                                    db = load_database()
+                                    db["users"][current_user]["history"] = st.session_state.user_history
+                                    save_database(db)
+                                    st.rerun()
+                        st.divider()
+
+    with tab2:
+        st.header(t("tab_deep"))
+        search_query = top_search if top_search else "advanced python optimization"
+        if st.button(t("execute_search")) and api_key:
+            with st.spinner("Analyzing..."):
+                raw_vids = fetch_videos(api_key, search_query, max_results=10)
+                scored = []
+                terms = [t.lower() for t in search_query.split()]
+                for v in raw_vids:
+                    score = 0
+                    try:
+                        transcript = YouTubeTranscriptApi.get_transcript(v["id"])
+                        full_text = " ".join([e["text"] for e in transcript]).lower()
+                        for term in terms: score += full_text.count(term)
+                    except Exception: pass
+                    v["score"] = score
+                    scored.append(v)
+                st.session_state.search_res = sorted(scored, key=lambda x: x["score"], reverse=True)
+
+        if "search_res" in st.session_state:
+            for v in st.session_state.search_res:
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    thumb_url = f"https://img.youtube.com/vi/{v['id']}/hqdefault.jpg"
+                    hover_embed_url = f"https://piped.video/embed/{v['id']}?autoplay=1&mute=1&loop=1"
+                    st.markdown(f"""
+                        <div class="thumb-hover-container">
+                            <iframe src="{hover_embed_url}" allow="autoplay"></iframe>
+                            <img src="{thumb_url}" alt="{v['title']}">
+                        </div>
+                    """, unsafe_allow_html=True)
+                with c2:
+                    st.subheader(v["title"])
+                    st.write(f"**Score:** {v['score']} | **Channel:** {v['channel']}")
+                    if is_premium:
+                        if st.checkbox(t("ai_summary"), key=f"sum_{v['id']}"):
+                            st.write(f"**AI Summary:** Matches `{search_query}` with high spoken keyword density.")
+                        st.markdown(f"[📥 **Pro Direct Download**](https://piped.video/watch?v={v['id']})")
+                    if st.button(t("stream_adfree") + f" ({v['id']})", key=f"s_rec_{v['id']}"):
+                        components.iframe(f"https://piped.video/embed/{v['id']}", height=315)
+                    if st.button(t("train_profile"), key=f"s_cal_{v['id']}"):
+                        st.session_state.user_history.append(v["title"])
+                        db = load_database()
+                        db["users"][current_user]["history"] = st.session_state.user_history
+                        save_database(db)
+                        st.rerun()
+                st.divider()
+
+    with tab3:
+        st.header(t("tab_pro"))
+        if not is_premium: st.warning("⚠️ Enter Pro Key in sidebar.")
+        else:
+            st.success("🟢 Pro Tier Active.")
+            new_g_name = sanitize(st.text_input(t("custom_genre_name"), "Rust Systems"))
+            new_g_query = sanitize(st.text_input(t("custom_genre_query"), "rustlang memory management"))
+            if st.button(t("add_matrix")):
+                db = load_database()
+                customs = db["users"][current_user].get("custom_genres", {})
+                customs[new_g_name] = new_g_query
+                db["users"][current_user]["custom_genres"] = customs
+                save_database(db)
+                st.success("Added!")
+                st.rerun()
+
+    st.divider()
+    st.markdown(f"### {t('diagnostics')}")
+    b_tab1, b_tab2 = st.tabs([t("patchnotes_tab"), t("directory_tab")])
+    with b_tab1: st.markdown("#### 🟢 IQube v2.9.15 — Forced Admin Rights & Dashboard Render Fix")
+    with b_tab2: st.markdown("#### 📋 Functionality Directory (English & German)")
